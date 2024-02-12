@@ -16,6 +16,7 @@ creds = infisical_api(
 
 class Params:
     """Parameters"""
+    preprod: bool = True if app_env == 'dev' else False
 
     class SQL:
         """SQL Parameters for Web_3d User"""

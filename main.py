@@ -5,7 +5,7 @@ import pymysql
 from kumpeapi import KAPI
 from params import Params
 
-kumpeapi = KAPI(Params.KumpeApps.api_key, mysql_creds=Params.SQL.dict())
+kumpeapi = KAPI(Params.KumpeApps.api_key, mysql_creds=Params.SQL.dict(), preprod= Params.preprod)
 
 
 def get_incarcerated_users():
