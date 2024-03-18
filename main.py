@@ -5,7 +5,9 @@ import pymysql
 from kumpeapi import KAPI
 from params import Params
 
-kumpeapi = KAPI(Params.KumpeApps.api_key, mysql_creds=Params.SQL.dict(), preprod= Params.preprod)
+kumpeapi = KAPI(
+    Params.KumpeApps.api_key, mysql_creds=Params.SQL.dict(), preprod=Params.preprod
+)
 
 
 def get_incarcerated_users():
@@ -78,14 +80,33 @@ def revoke_access(user: dict, revoke_list: dict):
     build_access_restore(revoke_list)
 
 
-def get_restore_list(users: dict):
+def get_restore_list():
     """Get Restore List"""
-    pass
+    database = mysql_connect()
+    cursor = database.cursor(pymysql.cursors.DictCursor)
+    sql = "SELECT * FROM BOT_Data.vw_incarcerationbot__pending_restore;"
+    cursor.execute(sql)
+    restore_list = cursor.fetchall()
+    cursor.close()
+    database.close()
+    restore_access(restore_list)
 
 
-def restore_access(user: dict, restore_list: dict):
+def restore_access(restore_list: dict):
     """Restore User's Access"""
-    pass
+    for restore in restore_list:
+        user_id = restore["user_id"]
+        product_id = restore["product_id"]
+        expire = restore["expire_date"]
+        release = restore["release_date"]
+        kumpeapi.add_access(
+            user_id=user_id,
+            product_id=product_id,
+            expire_date=expire,
+            comment=f"Added via incarceration_bot due to release on {release}",
+        )
+        kumpeapi.update_user_comment(user_id, comment="")
+        kumpeapi.update_user_field(user_id, "is_locked", "0")
 
 
 def mysql_connect():
@@ -102,3 +123,4 @@ def mysql_connect():
 
 if __name__ == "__main__":
     get_incarcerated_users()
+    get_restore_list()
