@@ -16,7 +16,8 @@ creds = infisical_api(
 
 class Params:
     """Parameters"""
-    preprod: bool = True if app_env == 'dev' else False
+
+    preprod: bool = True if app_env == "dev" else False
 
     class SQL:
         """SQL Parameters for Web_3d User"""
@@ -51,6 +52,17 @@ class Params:
 
         api_key = creds.get_secret(  # pylint: disable=no-member
             secret_name="KUMPEAPPS", environment=app_env, path="/API/"
+        ).secretValue
+
+    class PushOver:
+        """PushOver Params"""
+
+        api_key = creds.get_secret(  # pylint: disable=no-member
+            secret_name="PUSHOVER_KEY", environment=app_env, path="/API/"
+        ).secretValue
+
+        group = creds.get_secret(  # pylint: disable=no-member
+            secret_name="PUSHOVER_GROUP", environment=app_env, path="/API/"
         ).secretValue
 
 

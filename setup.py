@@ -15,3 +15,5 @@ def import_or_install(module, package=None):
 
 import_or_install("infisical_api")
 import_or_install("kumpeapi")
+import_or_install("zuercherportal_api")
+import_or_install("requests")
