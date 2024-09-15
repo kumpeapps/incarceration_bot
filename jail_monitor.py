@@ -122,10 +122,12 @@ def insert_incarceration_data(
                 `arrest_date`,
                 `arrest_reason`,
                 `arresting_agency`,
-                `jail`
+                `jail`,
+                `mugshot`
                 )
             VALUES
                 (
+                %s,
                 %s,
                 %s,
                 %s,
@@ -145,6 +147,7 @@ def insert_incarceration_data(
             inmate["hold_reasons"],
             inmate["held_for_agency"],
             jail,
+            inmate["mugshot"],
         ),
     )
     database.commit()
