@@ -1,6 +1,7 @@
 """Monitor Jails for new arrests"""
 
 import sys
+from datetime import date, timedelta
 import json
 import zuercherportal_api as zuercherportal
 import pymysql
@@ -44,10 +45,10 @@ def scrape_zuercherportal(jail: str):
             inmate_name = inmate["name"]
             logger.debug(f"{inmate_name} found in jail database")
             arrested_names.append(inmate["name"])
-            process_arrested_user(inmate)
+            process_arrested_user(inmate, jail)
 
 
-def process_arrested_user(inmate: object):
+def process_arrested_user(inmate: object, jail: str):
     """Process Identified Inmate"""
     logger.trace("process arrested user")
     monitor_list = get_monitor_list()
@@ -55,15 +56,16 @@ def process_arrested_user(inmate: object):
         logger.trace("for loop")
         if user["name"] == inmate["name"]:
             logger.debug("found arrest")
+            insert_incarceration_data(inmate, user, jail)
             if inmate["arrest_date"] != user["arrest_date"]:
                 logger.debug("found new arrest")
-                new_monitored_arrest(inmate, user)
+                new_monitored_arrest(inmate, user, jail)
             elif inmate["release_date"] != user["release_date"]:
                 logger.debug("found new release")
                 new_monitored_release(inmate, user)
 
 
-def new_monitored_arrest(inmate: object, user: object):
+def new_monitored_arrest(inmate: object, user: object, jail: str):
     """Process as new arrest"""
     send_message(
         f"{inmate['name']} Arrested",
@@ -99,6 +101,50 @@ def update_monitored_user(inmate: object):
             inmate["hold_reasons"],
             inmate["held_for_agency"],
             inmate["name"],
+        ),
+    )
+    database.commit()
+    cursor.close()
+
+
+def insert_incarceration_data(
+    inmate: object, user: object, jail: str, incarceration_date: str = f"{date.today()}"
+):
+    """Insert to Incarceration Database"""
+    database = mysql_connect()
+    cursor = database.cursor(pymysql.cursors.DictCursor)
+    sql = """
+            INSERT IGNORE INTO `BOT_Data`.`incarcerationbot__incarceration_data`
+                (
+                `date`,
+                `name`,
+                `username`,
+                `arrest_date`,
+                `arrest_reason`,
+                `arresting_agency`,
+                `jail`
+                )
+            VALUES
+                (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s
+                );
+        """
+    cursor.execute(
+        sql,
+        (
+            incarceration_date,
+            inmate["name"],
+            user["kumpeapps_username"],
+            inmate["arrest_date"],
+            inmate["hold_reasons"],
+            inmate["held_for_agency"],
+            jail,
         ),
     )
     database.commit()
