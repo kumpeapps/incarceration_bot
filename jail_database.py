@@ -134,9 +134,9 @@ def mysql_connect():
 if __name__ == "__main__":
     logger.remove()
     logger.add(sys.stderr, level="INFO")
-    jails = get_jail_database()
-    for jail in jails.jails:
-        if jail.scrape_system == "zuercherportal":
-            scrape_zuercherportal(jail)
+    jails_data = get_jail_database()
+    for jail_data in jails_data.jails:
+        if jail_data.scrape_system == "zuercherportal":
+            scrape_zuercherportal(jail_data)
         else:
-            logger.error(f"Scrape System {jail.scrape_system} is not yet configured.")
+            logger.error(f"Scrape System {jail_data.scrape_system} is not yet configured.")
