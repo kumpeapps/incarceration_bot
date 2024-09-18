@@ -10,6 +10,7 @@ import pymysql
 from loguru import logger
 from dataclass_wizard import fromdict
 from params import Params
+import washington_so_ar
 
 
 @dataclass
@@ -69,6 +70,16 @@ def scrape_zuercherportal(jail: Jail, log_level: str = "INFO"):
     database.commit()
     cursor.close()
 
+def scrape_washington_so_ar(jail: Jail):
+    """Get Inmate Records from Washington Count AR"""
+    inmate_list = washington_so_ar.get_data()
+    database = mysql_connect()
+    cursor = database.cursor(pymysql.cursors.DictCursor)
+    for inmate in inmate_list:
+        insert_incarceration_data(cursor, inmate, jail)
+    cursor.execute("call Apps_JailDatabase.log_sync(%s);", jail.jail_id)
+    database.commit()
+    cursor.close()
 
 def insert_incarceration_data(
     cursor, inmate: Inmate, jail: Jail, incarceration_date: str = f"{date.today()}"
@@ -138,5 +149,7 @@ if __name__ == "__main__":
     for jail_data in jails_data.jails:
         if jail_data.scrape_system == "zuercherportal":
             scrape_zuercherportal(jail_data)
+        elif jail_data.scrape_system == "washington_so_ar":
+            scrape_washington_so_ar(jail_data)
         else:
             logger.error(f"Scrape System {jail_data.scrape_system} is not yet configured.")
