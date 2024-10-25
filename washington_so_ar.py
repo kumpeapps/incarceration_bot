@@ -4,7 +4,7 @@ import requests
 import bs4
 from zuercherportal_api import Inmate
 
-url = "https://sheriff.washingtoncountyar.gov/res/DAlphaRoster.aspx"
+url = "https://www.washcosoar.gov/res/DetaineeAlphaRoster.aspx"
 
 
 def get_data() -> list:
