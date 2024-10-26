@@ -20,6 +20,6 @@ pytz==2024.2
 requests==2.32.2
 soupsieve==2.6
 urllib3==2.2.3
-Werkzeug==3.0.4
+Werkzeug==3.0.6
 zope.interface==7.0.3
 zuercherportal_api==1.0.3
