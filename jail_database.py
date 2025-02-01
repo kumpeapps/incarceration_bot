@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass
 from typing import List as PyList
 from datetime import date
+import requests
 import zuercherportal_api as zuercherportal
 from zuercherportal_api import Inmate, ZuercherportalResponse
 import pymysql
@@ -70,6 +71,7 @@ def scrape_zuercherportal(jail: Jail, log_level: str = "INFO"):
     database.commit()
     cursor.close()
 
+
 def scrape_washington_so_ar(jail: Jail):
     """Get Inmate Records from Washington Count AR"""
     inmate_list = washington_so_ar.get_data()
@@ -80,6 +82,7 @@ def scrape_washington_so_ar(jail: Jail):
     cursor.execute("call Apps_JailDatabase.log_sync(%s);", jail.jail_id)
     database.commit()
     cursor.close()
+
 
 def insert_incarceration_data(
     cursor, inmate: Inmate, jail: Jail, incarceration_date: str = f"{date.today()}"
@@ -128,6 +131,13 @@ def insert_incarceration_data(
             inmate.race,
         ),
     )
+    oneuptime_url = " https://oneuptime.vm.kumpeapps.com/heartbeat/29bf6ed1-e0ec-11ef-a1c8-dbe03cc3d472"
+
+    data = {
+        "status": "success",
+    }
+
+    requests.post(oneuptime_url, data=data, timeout=5)
 
 
 def mysql_connect():
@@ -152,4 +162,6 @@ if __name__ == "__main__":
         elif jail_data.scrape_system == "washington_so_ar":
             scrape_washington_so_ar(jail_data)
         else:
-            logger.error(f"Scrape System {jail_data.scrape_system} is not yet configured.")
+            logger.error(
+                f"Scrape System {jail_data.scrape_system} is not yet configured."
+            )
