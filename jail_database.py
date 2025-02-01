@@ -138,6 +138,8 @@ def insert_incarceration_data(
     }
     try:
         requests.post(oneuptime_url, data=data, timeout=5)
+    except requests.exceptions.RequestException:
+        pass
     finally:
         logger.info("Oneuptime Heartbeat Sent")
 
