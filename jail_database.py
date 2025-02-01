@@ -136,8 +136,10 @@ def insert_incarceration_data(
     data = {
         "status": "success",
     }
-
-    requests.post(oneuptime_url, data=data, timeout=30)
+    try:
+        requests.post(oneuptime_url, data=data, timeout=5)
+    finally:
+        logger.info("Oneuptime Heartbeat Sent")
 
 
 def mysql_connect():
