@@ -13,6 +13,8 @@ from dataclass_wizard import fromdict
 from params import Params
 import washington_so_ar
 
+jail_inmate_counts = []
+
 
 @dataclass
 class Jail:
@@ -70,6 +72,9 @@ def scrape_zuercherportal(jail: Jail, log_level: str = "INFO"):
     cursor.execute("call Apps_JailDatabase.log_sync(%s);", jail.jail_id)
     database.commit()
     cursor.close()
+    jail_inmate_counts.append(
+        {"jail": jail.jail_name, "inmate_count": len(inmate_list)}
+    )
 
 
 def scrape_washington_so_ar(jail: Jail):
@@ -82,6 +87,9 @@ def scrape_washington_so_ar(jail: Jail):
     cursor.execute("call Apps_JailDatabase.log_sync(%s);", jail.jail_id)
     database.commit()
     cursor.close()
+    jail_inmate_counts.append(
+        {"jail": jail.jail_name, "inmate_count": len(inmate_list)}
+    )
 
 
 def insert_incarceration_data(
@@ -158,13 +166,14 @@ if __name__ == "__main__":
             logger.error(
                 f"Scrape System {jail_data.scrape_system} is not yet configured."
             )
-    oneuptime_url = "https://oneuptime.vm.kumpeapps.com/heartbeat/29bf6ed1-e0ec-11ef-a1c8-dbe03cc3d472"
+    ONEUPTIME_URL = "https://oneuptime.vm.kumpeapps.com/heartbeat/29bf6ed1-e0ec-11ef-a1c8-dbe03cc3d472"
 
     data = {
         "status": "success",
+        "inmate_counts": jail_inmate_counts,
     }
     try:
-        requests.post(oneuptime_url, data=data, timeout=5)
+        requests.post(ONEUPTIME_URL, data=data, timeout=5)
     except requests.exceptions.RequestException:
         pass
     finally:
