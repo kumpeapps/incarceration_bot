@@ -137,7 +137,7 @@ def insert_incarceration_data(
         "status": "success",
     }
 
-    requests.post(oneuptime_url, data=data, timeout=5)
+    requests.post(oneuptime_url, data=data, timeout=30)
 
 
 def mysql_connect():
