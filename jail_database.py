@@ -131,7 +131,7 @@ def insert_incarceration_data(
             inmate.race,
         ),
     )
-    oneuptime_url = " https://oneuptime.vm.kumpeapps.com/heartbeat/29bf6ed1-e0ec-11ef-a1c8-dbe03cc3d472"
+    oneuptime_url = "https://oneuptime.vm.kumpeapps.com/heartbeat/29bf6ed1-e0ec-11ef-a1c8-dbe03cc3d472"
 
     data = {
         "status": "success",
