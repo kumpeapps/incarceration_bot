@@ -13,7 +13,7 @@ from dataclass_wizard import fromdict
 from params import Params
 import washington_so_ar
 
-jail_inmate_counts = []
+jail_inmate_counts: dict[str, int] = {}
 
 
 @dataclass
@@ -72,9 +72,7 @@ def scrape_zuercherportal(jail: Jail, log_level: str = "INFO"):
     cursor.execute("call Apps_JailDatabase.log_sync(%s);", jail.jail_id)
     database.commit()
     cursor.close()
-    jail_inmate_counts.append(
-        {"jail": jail.jail_name, "inmate_count": len(inmate_list)}
-    )
+    jail_inmate_counts[jail.jail_name] = len(inmate_list)
 
 
 def scrape_washington_so_ar(jail: Jail):
@@ -87,9 +85,7 @@ def scrape_washington_so_ar(jail: Jail):
     cursor.execute("call Apps_JailDatabase.log_sync(%s);", jail.jail_id)
     database.commit()
     cursor.close()
-    jail_inmate_counts.append(
-        {"jail": jail.jail_name, "inmate_count": len(inmate_list)}
-    )
+    jail_inmate_counts[jail.jail_name] = len(inmate_list)
 
 
 def insert_incarceration_data(
