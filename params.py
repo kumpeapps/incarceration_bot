@@ -1,18 +1,14 @@
 """Parameters file for Kumpe3D-Python"""
 
 import setup  # pylint: disable=unused-import, wrong-import-order
-import os
-from dotenv import load_dotenv
-from infisical_api import infisical_api
+import configparser
 
+config = configparser.ConfigParser()
+config.read("config.ini")
+mysql_config = config["mysql"]
+settings_config = config["settings"]
 
-load_dotenv()
-service_token = os.getenv("SERVICE_TOKEN")
-app_env = os.getenv("APP_ENV")
-creds = infisical_api(
-    service_token=service_token, infisical_url="https://creds.kumpeapps.com"
-)
-
+app_env = settings_config["app_env"]
 
 class Params:
     """Parameters"""
@@ -22,19 +18,11 @@ class Params:
     class SQL:
         """SQL Parameters for Web_3d User"""
 
-        username = creds.get_secret(  # pylint: disable=no-member
-            secret_name="USERNAME", environment=app_env, path="/MYSQL/"
-        ).secretValue
-        password = creds.get_secret(  # pylint: disable=no-member
-            secret_name="PASSWORD", environment=app_env, path="/MYSQL/"
-        ).secretValue
-        server = creds.get_secret(  # pylint: disable=no-member
-            secret_name="SERVER", environment=app_env, path="/MYSQL/"
-        ).secretValue
-        port = creds.get_secret(  # pylint: disable=no-member
-            secret_name="PORT", environment=app_env, path="/MYSQL/"
-        ).secretValue
-        database = "BOT_Data"
+        username = mysql_config["username"]
+        password = mysql_config["password"]
+        server = mysql_config["server"]
+        port = mysql_config["port"]
+        database = mysql_config["database"]
 
         @staticmethod
         def dict():
@@ -50,20 +38,14 @@ class Params:
     class KumpeApps:
         """KumpeApps Params"""
 
-        api_key = creds.get_secret(  # pylint: disable=no-member
-            secret_name="KUMPEAPPS", environment=app_env, path="/API/"
-        ).secretValue
+        api_key = settings_config["kumpeapps_apikey"]
 
     class PushOver:
         """PushOver Params"""
 
-        api_key = creds.get_secret(  # pylint: disable=no-member
-            secret_name="PUSHOVER_KEY", environment=app_env, path="/API/"
-        ).secretValue
+        api_key = settings_config["pushover_apikey"]
 
-        group = creds.get_secret(  # pylint: disable=no-member
-            secret_name="PUSHOVER_GROUP", environment=app_env, path="/API/"
-        ).secretValue
+        group = settings_config["pushover_group"]
 
 
 if __name__ == "__main__":

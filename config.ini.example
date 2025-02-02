@@ -1,0 +1,14 @@
+[mysql]
+server = 
+username = 
+password = 
+database = 
+port = 3306
+
+[settings]
+app_env = prod
+
+[api]
+kumpeapps_apikey = 
+pushover_group = 
+pushover_apikey = 
