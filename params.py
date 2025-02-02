@@ -7,6 +7,7 @@ config = configparser.ConfigParser()
 config.read("config.ini")
 mysql_config = config["mysql"]
 settings_config = config["settings"]
+api_config = config["api"]
 
 app_env = settings_config["app_env"]
 
@@ -38,14 +39,14 @@ class Params:
     class KumpeApps:
         """KumpeApps Params"""
 
-        api_key = settings_config["kumpeapps_apikey"]
+        api_key = api_config["kumpeapps_apikey"]
 
     class PushOver:
         """PushOver Params"""
 
-        api_key = settings_config["pushover_apikey"]
+        api_key = api_config["pushover_apikey"]
 
-        group = settings_config["pushover_group"]
+        group = api_config["pushover_group"]
 
 
 if __name__ == "__main__":
