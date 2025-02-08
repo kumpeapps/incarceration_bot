@@ -84,9 +84,8 @@ class Monitor(Base):
                 else f"{inmate.name} has been arrested"
             )
             message = (
-                f"{inmate.name} has been arrested by {inmate.held_for_agency} for {inmate.hold_reasons}"
-                if not released
-                else f"{inmate.name} has been released"
+                f"{inmate.name} has been released" if released else f"{inmate.name} has been arrested by {inmate.held_for_agency} for {inmate.hold_reasons}"
+
             )
             if pushover_api_key == "":
                 raise ValueError("Pushover API Key not set")
