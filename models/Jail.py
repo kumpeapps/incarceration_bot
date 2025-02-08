@@ -66,9 +66,6 @@ class Jail(Base):  # type: ignore
     def __str__(self) -> str:
         return str(self.jail_name)
 
-    def __bool__(self) -> bool:
-        return bool(self.active)
-
     def update_last_scrape_date(self):
         """Update the last scrape date"""
         logger.info(f"Updating last scrape date for {self.jail_name}")

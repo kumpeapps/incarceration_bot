@@ -40,6 +40,7 @@ def update_jails_db(session: Session, filename: str = "jails.json"):
                 scrape_system=jail["scrape_system"],
                 created_date=jail["created_date"],
                 updated_date=jail["updated_date"],
+                active=False,
             )
             session.add(new_jail)
     try:
