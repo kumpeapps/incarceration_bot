@@ -35,7 +35,7 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                         skip = True
                     else:
                         logger.info("No full name match found.")
-                if monitor.arrest_date != inmate.arrest_date:
+                if monitor.arrest_date != inmate.arrest_date and not skip:
                     logger.trace(f"New arrest date for {monitor.name}")
                     if monitor.name == inmate.name:
                         logger.trace(f"Found exact match for {monitor.name}")
