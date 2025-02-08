@@ -1,0 +1,35 @@
+[
+    {
+        "id": 1,
+        "jail_name": "Benton County AR Jail",
+        "state": "AR",
+        "jail_id": "benton-so-ar",
+        "scrape_system": "zuercherportal",
+        "active": true,
+        "created_date": "2025-02-07",
+        "updated_date": "2025-02-07",
+        "last_scrape_date": "2025-02-08"
+    },
+    {
+        "id": 2,
+        "jail_name": "Pulaski County AR Jail",
+        "state": "AR",
+        "jail_id": "pulaski-so-ar",
+        "scrape_system": "zuercherportal",
+        "active": true,
+        "created_date": "2025-02-07",
+        "updated_date": "2025-02-07",
+        "last_scrape_date": "2025-02-08"
+    },
+    {
+        "id": 3,
+        "jail_name": "Washington County AR Jail",
+        "state": "AR",
+        "jail_id": "washington-so-ar",
+        "scrape_system": "washington_so_ar",
+        "active": true,
+        "created_date": "2025-02-07",
+        "updated_date": "2025-02-07",
+        "last_scrape_date": "2025-02-08"
+    }
+]

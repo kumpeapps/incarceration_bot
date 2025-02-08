@@ -12,6 +12,7 @@ from sqlalchemy import (
     Date,
 )
 from database_connect import Base
+from models.Inmate import Inmate
 
 
 @dataclass
@@ -43,7 +44,6 @@ class Jail(Base):  # type: ignore
     created_date = Column(Date, nullable=False, default=date.today())
     updated_date = Column(Date, nullable=False, default=date.today())
     last_scrape_date = Column(Date, nullable=True)
-    version = Column(String(10), nullable=True, default="1.0")
 
     inmates = relationship("Inmate", back_populates="jail")
 
