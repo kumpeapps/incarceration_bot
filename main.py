@@ -9,6 +9,7 @@ from models.Jail import Jail
 from scrapes.zuercher import scrape_zuercherportal
 from scrapes.washington_so_ar import scrape_washington_so_ar
 import database_connect as db
+from update_jails_db import update_jails_db
 
 
 DEFAULT_SCHEDULE: str = "01:00,05:00,09:00,13:00,17:00,21:00"
@@ -33,6 +34,7 @@ def run():
     """Run the bot"""
     logger.info("Starting Bot")
     session = db.Session()
+    update_jails_db(session)
     if enable_jails_containing:
         enable_jails(session)
     jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
