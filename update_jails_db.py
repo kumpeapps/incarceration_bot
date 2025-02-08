@@ -47,6 +47,7 @@ def update_jails_db(session: Session, filename: str = "jails.json"):
         session.commit()
     except IntegrityError:
         logger.error("Integrity Error")
+        session.rollback()
     logger.success("Jail Database Updated")
 
 
