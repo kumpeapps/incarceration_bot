@@ -3,12 +3,13 @@
 import os
 import requests # type: ignore
 import json
+from loguru import logger
 from dataclasses import dataclass
 from sqlalchemy import (
     Column,
     Integer,
     String,
-    LargeBinary,
+    Text,
     UniqueConstraint,
 )
 from database_connect import Base
@@ -46,7 +47,7 @@ class Monitor(Base):
     arrest_reason = Column(String(255), nullable=True)
     arresting_agency = Column(String(255), nullable=True)
     jail = Column(String(255), nullable=True)
-    mugshot = Column(LargeBinary, nullable=True)
+    mugshot = Column(Text(65535), nullable=True)
     enable_notifications = Column(Integer, nullable=False, default=1)
     notify_method = Column(String(255), nullable=True, default="pushover")
     notify_address = Column(String(255), nullable=False, default="")
@@ -72,6 +73,7 @@ class Monitor(Base):
 
         def send_pushover(self):
             """Send a message via Pushover"""
+            logger.info(f"Sending Pushover notification.")
             user_key = self.notify_address
             pushover_api_key = os.getenv("PUSHOVER_API_KEY", "")
             pushover_sound = os.getenv("PUSHOVER_SOUND", "default")
@@ -108,9 +110,8 @@ class Monitor(Base):
                     ),
                     timeout=10,
                 )
-            except requests.exceptions.RequestException:
-                pass
-            raise NotImplementedError("Pushover not implemented")
+            except requests.exceptions.RequestException as e:
+                logger.exception(f"Error sending Pushover notification: {e}")
 
         def send_email(self):
             """Send a message via email"""

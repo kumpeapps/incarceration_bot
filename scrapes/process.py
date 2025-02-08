@@ -1,5 +1,7 @@
 """Process scraped data"""
 
+
+from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
@@ -28,7 +30,8 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                 logger.info(f"Matched {monitor.name} to {inmate.name}")
                 if monitor.arrest_date != inmate.arrest_date:
                     logger.trace(f"New arrest date for {monitor.name}")
-                    if monitor.name == inmate.name:
+                    compare_name: Optional[Monitor] = session.query(Monitor).filter(Monitor.name == inmate.name).first()
+                    if compare_name and compare_name.name == inmate.name:
                         logger.trace(f"Found exact match for {monitor.name}")
                         monitor.arrest_date = inmate.arrest_date
                     else:
