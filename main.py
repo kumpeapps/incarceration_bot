@@ -14,7 +14,7 @@ import database_connect as db
 DEFAULT_SCHEDULE: str = "01:00,05:00,09:00,13:00,17:00,21:00"
 run_schedule: list = os.getenv("RUN_SCHEDULE", DEFAULT_SCHEDULE).split(",")
 enable_jails_containing: list = os.getenv("ENABLE_JAILS_CONTAINING", "").split(",")
-is_dev: bool = True if os.getenv("DEV", "False") == "True" else False
+is_on_demand: bool = True if os.getenv("ON_DEMAND", "False") == "True" else False
 
 def enable_jails(session: Session):
     """Enable Jails"""
@@ -43,15 +43,16 @@ def run():
         elif jail.scrape_system == "washington_so_ar":
             scrape_washington_so_ar(session, jail)
     session.close()
+    logger.success("Bot Finished")
 
 
 if __name__ == "__main__":
     db.Base.metadata.create_all(db.db)
-    if is_dev:
-        logger.info("Running in Development Mode.")
+    if is_on_demand:
+        logger.info("Running in On Demand Mode.")
         run()
     else:
-        logger.info("Running in Production Mode.")
+        logger.info("Running in Normal Production Mode.")
         for time_to_run in run_schedule:
             schedule.every().day.at(time_to_run).do(run)
         while True:

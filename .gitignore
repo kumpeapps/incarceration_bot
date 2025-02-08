@@ -235,4 +235,6 @@ pyrightconfig.json
 pyvenv.cfg
 pip-selfcheck.json
 
+docker-compose.yml
+
 # End of https://www.toptal.com/developers/gitignore/api/macos,linux,python,venv,dotenv
