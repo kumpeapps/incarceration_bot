@@ -3,7 +3,7 @@
 This bot is a docker container for scraping jail websites and saving that data to your database.
 
 ### Current Jails
-#### Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it). Other jails need to figure out how to scrape the website first
+##### Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it). Other jails need to figure out how to scrape the website first
 - In Arkansas
     - Benton County
     - Pulaski County
