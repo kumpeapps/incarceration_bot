@@ -1,8 +1,8 @@
-name: Push Docker Image to Docker Hub (Beta)
+name: Push Docker Image to Docker Hub (Latest)
 
 on:
   push:
-    branches: Beta
+    branches: master
 
 jobs:
   build:
@@ -20,5 +20,5 @@ jobs:
       - name: build the image
         run: |
             docker buildx build --push \
-                --tag justinkumpe/incarceration_bot:latest-beta \
+                --tag justinkumpe/incarceration_bot:latest \
                 --platform linux/amd64,linux/arm/v7,linux/arm64 .
