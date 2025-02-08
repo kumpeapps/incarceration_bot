@@ -1,126 +1,72 @@
 """Incarceration Bot"""
 
-import setup  # pylint: disable=unused-import, wrong-import-order
-import pymysql
-from kumpeapi import KAPI
-from params import Params
-
-kumpeapi = KAPI(
-    Params.KumpeApps.api_key, mysql_creds=Params.SQL.dict(), preprod=Params.preprod
-)
-
-
-def get_incarcerated_users():
-    """Get list of incarcerated users"""
-    database = mysql_connect()
-    cursor = database.cursor(pymysql.cursors.DictCursor)
-    sql = "SELECT * FROM BOT_Data.vw_incarcerationbot__incarcerated_users;"
-    cursor.execute(sql)
-    users = cursor.fetchall()
-    cursor.close()
-    database.close()
-    get_incarcerated_user_access(users)
+import time
+import os
+import sys
+import schedule
+from loguru import logger
+from sqlalchemy.orm import Session
+from models.Jail import Jail
+from scrapes.zuercher import scrape_zuercherportal
+from scrapes.washington_so_ar import scrape_washington_so_ar
+import database_connect as db
+from update_jails_db import update_jails_db
 
 
-def get_incarcerated_user_access(users: dict):
-    """Get the incarcerated users access to systems requiring revocation"""
-    for user in users:
-        user_id = user["user_id"]
-        database = mysql_connect()
-        cursor = database.cursor(pymysql.cursors.DictCursor)
-        sql = "SELECT * FROM BOT_Data.vw_incarcerationbot__revoke_access WHERE user_id = %s;"
-        cursor.execute(sql, user_id)
-        revoke_list = cursor.fetchall()
-        cursor.close()
-        database.close()
-        revoke_access(user, revoke_list)
+DEFAULT_SCHEDULE: str = "01:00,05:00,09:00,13:00,17:00,21:00"
+run_schedule: list = os.getenv("RUN_SCHEDULE", DEFAULT_SCHEDULE).split(",")
+enable_jails_containing: list = os.getenv("ENABLE_JAILS_CONTAINING", "-").split(",")
+is_on_demand: bool = True if os.getenv("ON_DEMAND", "False") == "True" else False
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+def enable_jails(session: Session):
+    """Enable Jails"""
+    logger.info("Enabling/Disabling Jails")
+    jails = session.query(Jail).all()
+    for jail in jails:
+        logger.trace(f"Checking {jail.jail_id}")
+        for enable_jail in enable_jails_containing:
+            logger.trace(f"Checking {enable_jail}")
+            logger.debug(f"Checking {jail.jail_id} for {enable_jail}")
+            if enable_jail in jail.jail_id:
+                logger.debug(f"Enabling {jail.jail_name}")
+                jail.active = True  # type: ignore
+            else:
+                logger.debug(f"Disabling {jail.jail_name}")
+                jail.active = False  # type: ignore
+    session.commit()
+    return False
 
 
-def build_access_restore(revoke_list: dict):
-    """Backup User Access for Restore Later"""
-    for access in revoke_list:
-        database = mysql_connect()
-        cursor = database.cursor(pymysql.cursors.DictCursor)
-        sql = """INSERT INTO `BOT_Data`.`incarcerationbot__access_backup`
-                    (
-                        `user_id`,
-                        `product_id`,
-                        `expire_date`
-                    )
-                VALUES
-                    (
-                        %s,
-                        %s,
-                        %s
-                        );
-            """
-        cursor.execute(
-            sql,
-            (
-                access["user_id"],
-                access["product_id"],
-                access["expire_date"],
-            ),
-        )
-        database.commit()
-        cursor.close()
-
-
-def revoke_access(user: dict, revoke_list: dict):
-    """Revoke Access to Incarcerated user and Lock Account"""
-    user_id = user["user_id"]
-    for access in revoke_list:
-        kumpeapi.expire_access(
-            user_id, access["product_id"], "Revoked due to incarceration"
-        )
-    kumpeapi.update_user_comment(
-        user_id, comment=f"User Locked by Incarceration Bot: {user['comment']}"
-    )
-    kumpeapi.update_user_field(user_id, "is_locked", "1")
-    build_access_restore(revoke_list)
-
-
-def get_restore_list():
-    """Get Restore List"""
-    database = mysql_connect()
-    cursor = database.cursor(pymysql.cursors.DictCursor)
-    sql = "SELECT * FROM BOT_Data.vw_incarcerationbot__pending_restore;"
-    cursor.execute(sql)
-    restore_list = cursor.fetchall()
-    cursor.close()
-    database.close()
-    restore_access(restore_list)
-
-
-def restore_access(restore_list: dict):
-    """Restore User's Access"""
-    for restore in restore_list:
-        user_id = restore["user_id"]
-        product_id = restore["product_id"]
-        expire = restore["expire_date"]
-        release = restore["release_date"]
-        kumpeapi.add_access(
-            user_id=user_id,
-            product_id=product_id,
-            expire_date=expire,
-            comment=f"Added via incarceration_bot due to release on {release}",
-        )
-        kumpeapi.update_user_comment(user_id, comment="")
-        kumpeapi.update_user_field(user_id, "is_locked", "0")
-
-
-def mysql_connect():
-    """Connect to MySQL"""
-    database = pymysql.connect(
-        db=Params.SQL.database,
-        user=Params.SQL.username,
-        passwd=Params.SQL.password,
-        host=Params.SQL.server,
-        port=3306,
-    )
-    return database
+def run():
+    """Run the bot"""
+    logger.info("Starting Bot")
+    session = db.Session()
+    update_jails_db(session)
+    if enable_jails_containing:
+        enable_jails(session)
+    jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+    for jail in jails:
+        logger.debug(f"Preparing {jail.jail_name}")
+        if jail.scrape_system == "zuercherportal":
+            scrape_zuercherportal(session, jail)
+        elif jail.scrape_system == "washington_so_ar":
+            scrape_washington_so_ar(session, jail)
+    session.close()
+    logger.success("Bot Finished")
 
 
 if __name__ == "__main__":
-    get_incarcerated_users()
-    get_restore_list()
+    logger.remove()
+    logger.add(sys.stderr, level=LOG_LEVEL)
+    db.Base.metadata.create_all(db.db)
+    if is_on_demand:
+        logger.info("Running in On Demand Mode.")
+        run()
+    else:
+        logger.info("Running in Normal Production Mode.")
+        for time_to_run in run_schedule:
+            schedule.every().day.at(time_to_run).do(run)
+        while True:
+            schedule.run_pending()
+            time.sleep(60)

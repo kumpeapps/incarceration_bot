@@ -1,8 +1,23 @@
-# Created by https://www.toptal.com/developers/gitignore/api/macos,python,venv,dotenv,virtualenv
-# Edit at https://www.toptal.com/developers/gitignore?templates=macos,python,venv,dotenv,virtualenv
+# Created by https://www.toptal.com/developers/gitignore/api/macos,linux,python,venv,dotenv
+# Edit at https://www.toptal.com/developers/gitignore?templates=macos,linux,python,venv,dotenv
 
 ### dotenv ###
 .env
+
+### Linux ###
+*~
+
+# temporary files which can be created if a process still has a handle open of a deleted file
+.fuse_hidden*
+
+# KDE directory preferences
+.directory
+
+# Linux trash folder which might appear on any partition or disk
+.Trash-*
+
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
 
 ### macOS ###
 # General
@@ -13,7 +28,7 @@
 # Icon must end with two \r
 Icon
 
-config.ini
+
 # Thumbnails
 ._*
 
@@ -32,7 +47,7 @@ config.ini
 Network Trash Folder
 Temporary Items
 .apdisk
-.cur_version
+
 ### macOS Patch ###
 # iCloud generated files
 *.icloud
@@ -100,8 +115,6 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-
-patch.*
 
 # Flask stuff:
 instance/
@@ -206,7 +219,7 @@ poetry.toml
 
 # ruff
 .ruff_cache/
-*.pdf
+
 # LSP config files
 pyrightconfig.json
 
@@ -222,8 +235,7 @@ pyrightconfig.json
 pyvenv.cfg
 pip-selfcheck.json
 
-### VirtualEnv ###
-# Virtualenv
-# http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
+docker-compose.yml
+private_*.*
 
-# End of https://www.toptal.com/developers/gitignore/api/macos,python,venv,dotenv,virtualenv
+# End of https://www.toptal.com/developers/gitignore/api/macos,linux,python,venv,dotenv
