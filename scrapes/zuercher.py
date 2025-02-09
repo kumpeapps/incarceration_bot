@@ -31,12 +31,12 @@ def scrape_zuercherportal(session: Session, jail: Jail, log_level: str = "INFO")
             name=inmate.name,
             arrest_date=(
                 datetime.strptime(inmate.arrest_date, "%Y-%m-%d").date()
-                if inmate.arrest_date or inmate.arrest_date == ""
+                if inmate.arrest_date and not inmate.arrest_date == ""
                 else None
             ),
             release_date=(
                 datetime.strptime(inmate.release_date, "%Y-%m-%d").date()
-                if inmate.arrest_date or inmate.arrest_date == ""
+                if inmate.arrest_date and not inmate.arrest_date == ""
                 else ""
             ),
             hold_reasons=inmate.hold_reasons,

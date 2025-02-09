@@ -46,7 +46,7 @@ def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO
             sex=sex,
             arrest_date=(
                 datetime.strptime(intake, "%m/%d/%Y").date()
-                if intake or intake == ""
+                if intake and not intake == ""
                 else None
             ),
             jail_id=jail.jail_id,
