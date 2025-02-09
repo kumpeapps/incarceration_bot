@@ -1,8 +1,8 @@
 """Monitor Model"""
 
 import os
-import requests # type: ignore
 import json
+import requests # type: ignore
 from loguru import logger
 from sqlalchemy import (
     Column,
