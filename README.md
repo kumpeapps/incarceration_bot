@@ -1,6 +1,6 @@
-# incarceration_bot
+# Incarceration Bot
  
-This bot is a docker container for scraping jail websites and saving that data to your database.
+This bot is a docker container for scraping jail websites and saving inmate data to your database.
 
 ### Current Jails
 ##### Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it pretty quickly). Other jails need to figure out how to scrape the website first
