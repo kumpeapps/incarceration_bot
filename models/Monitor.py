@@ -4,13 +4,13 @@ import os
 import requests # type: ignore
 import json
 from loguru import logger
-from dataclasses import dataclass
 from sqlalchemy import (
     Column,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    Date,
 )
 from database_connect import Base
 from models.Inmate import Inmate
@@ -42,8 +42,8 @@ class Monitor(Base):
         "idmonitors", Integer, primary_key=True, autoincrement=True, nullable=False
     )
     name = Column(String(255), nullable=False)
-    arrest_date = Column(String(255), nullable=True)
-    release_date = Column(String(255), nullable=True)
+    arrest_date = Column(Date, nullable=True)
+    release_date = Column(Date, nullable=True)
     arrest_reason = Column(String(255), nullable=True)
     arresting_agency = Column(String(255), nullable=True)
     jail = Column(String(255), nullable=True)

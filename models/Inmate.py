@@ -11,7 +11,6 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     Text,
-    LargeBinary,
 )
 from sqlalchemy.orm import relationship
 from database_connect import Base
@@ -58,7 +57,7 @@ class Inmate(Base):  # type: ignore
     race = Column(String(255), nullable=False, default="Unknown")
     sex = Column(String(255), nullable=False, default="Unknown")
     cell_block = Column(String(255), nullable=True)
-    arrest_date = Column(String(255), nullable=True)
+    arrest_date = Column(Date, nullable=True)
     held_for_agency = Column(String(255), nullable=True)
     mugshot = Column(Text(65535), nullable=True)
     dob = Column(String(255), nullable=False, default="Unknown")
