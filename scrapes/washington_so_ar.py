@@ -1,8 +1,8 @@
 """Web Scraper for Washington County AR Jail"""
 
 from datetime import datetime
-import requests # type: ignore
-import bs4 # type: ignore
+import requests  # type: ignore
+import bs4  # type: ignore
 from sqlalchemy.orm import Session
 from loguru import logger
 from models.Jail import Jail
@@ -40,11 +40,15 @@ def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO
         # prior_bookings = cells[4].text.strip()
         intake = cells[5].text.strip()
         # bond = cells[6].text.strip()
-        inmate = Inmate( # pylint: disable=unexpected-keyword-arg
+        inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=name,
             race=race,
             sex=sex,
-            arrest_date=datetime.strptime(intake, "%m/%d/%Y").date() if intake else None,
+            arrest_date=(
+                datetime.strptime(intake, "%m/%d/%Y").date()
+                if intake or intake == ""
+                else None
+            ),
             jail_id=jail.jail_id,
             is_juvenile=False,
         )
