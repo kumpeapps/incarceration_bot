@@ -1,5 +1,6 @@
 """Scrape Zuercher Portal for Inmate Records"""
 
+from datetime import datetime
 import zuercherportal_api as zuercherportal  # type: ignore
 from sqlalchemy.orm import Session
 from loguru import logger
@@ -28,8 +29,8 @@ def scrape_zuercherportal(session: Session, jail: Jail, log_level: str = "INFO")
     for inmate in inmate_data.records:
         new_inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=inmate.name,
-            arrest_date=inmate.arrest_date,
-            release_date=inmate.release_date,
+            arrest_date=datetime.strptime(inmate.arrest_date, "%m/%d/%Y").date(),
+            release_date=datetime.strptime(inmate.release_date, "%m/%d/%Y").date(),
             hold_reasons=inmate.hold_reasons,
             held_for_agency=inmate.held_for_agency,
             jail_id=jail.jail_id,
