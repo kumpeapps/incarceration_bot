@@ -43,7 +43,7 @@ class Monitor(Base):
     )
     name = Column(String(255), nullable=False)
     arrest_date = Column(Date, nullable=True)
-    release_date = Column(Date, nullable=True)
+    release_date = Column(String(255), nullable=True)
     arrest_reason = Column(String(255), nullable=True)
     arresting_agency = Column(String(255), nullable=True)
     jail = Column(String(255), nullable=True)
