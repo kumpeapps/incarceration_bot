@@ -27,18 +27,18 @@ def scrape_zuercherportal(session: Session, jail: Jail, log_level: str = "INFO")
     inmate_data: ZuercherportalResponse = jail_api.inmate_search(records_per_page=10000)
     inmate_list: list[Inmate] = []
     for inmate in inmate_data.records:
+        try:
+            arrest_date = datetime.strptime(inmate.arrest_date, "%Y-%m-%d").date()
+        except ValueError:
+            arrest_date = None
+        try:
+            release_date = datetime.strptime(inmate.release_date, "%Y-%m-%d").date()
+        except ValueError:
+            release_date = ""
         new_inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=inmate.name,
-            arrest_date=(
-                datetime.strptime(inmate.arrest_date, "%Y-%m-%d").date()
-                if inmate.arrest_date and not inmate.arrest_date == ""
-                else None
-            ),
-            release_date=(
-                datetime.strptime(inmate.release_date, "%Y-%m-%d").date()
-                if inmate.arrest_date and not inmate.arrest_date == ""
-                else ""
-            ),
+            arrest_date=arrest_date,
+            release_date=release_date,
             hold_reasons=inmate.hold_reasons,
             held_for_agency=inmate.held_for_agency,
             jail_id=jail.jail_id,

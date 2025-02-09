@@ -40,15 +40,12 @@ def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO
         # prior_bookings = cells[4].text.strip()
         intake = cells[5].text.strip()
         # bond = cells[6].text.strip()
+        arrest_date = datetime.strptime(intake, "%m/%d/%Y").date()
         inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=name,
             race=race,
             sex=sex,
-            arrest_date=(
-                datetime.strptime(intake, "%m/%d/%Y").date()
-                if intake and not intake == ""
-                else None
-            ),
+            arrest_date=arrest_date,
             jail_id=jail.jail_id,
             is_juvenile=False,
         )
