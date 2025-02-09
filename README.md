@@ -1,4 +1,5 @@
 # Incarceration Bot
+![Docker Image Version](https://img.shields.io/docker/v/justinkumpe/incarceration_bot?sort=semver&logo=docker)
  
 This bot is a docker container for scraping jail websites and saving inmate data to your database.
 
