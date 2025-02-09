@@ -40,7 +40,10 @@ def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO
         # prior_bookings = cells[4].text.strip()
         intake = cells[5].text.strip()
         # bond = cells[6].text.strip()
-        arrest_date = datetime.strptime(intake, "%m/%d/%Y %H:%M").date()
+        try:
+            arrest_date = datetime.strptime(intake, "%m/%d/%Y %H:%M").date()
+        except ValueError:
+            arrest_date = None
         inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=name,
             race=race,
