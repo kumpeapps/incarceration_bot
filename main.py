@@ -4,6 +4,7 @@ import time
 import os
 import sys
 import schedule
+import requests  # type: ignore
 from loguru import logger
 from sqlalchemy.orm import Session
 from models.Jail import Jail
@@ -18,6 +19,8 @@ run_schedule: list = os.getenv("RUN_SCHEDULE", DEFAULT_SCHEDULE).split(",")
 enable_jails_containing: list = os.getenv("ENABLE_JAILS_CONTAINING", "-").split(",")
 is_on_demand: bool = True if os.getenv("ON_DEMAND", "False") == "True" else False
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
+
 
 def enable_jails(session: Session):
     """Enable Jails"""
@@ -52,6 +55,13 @@ def run():
         elif jail.scrape_system == "washington_so_ar":
             scrape_washington_so_ar(session, jail)
     session.close()
+    if HEARTBEAT_WEBHOOK:
+        logger.info("Sending Webhook Notification")
+        requests.post(
+            HEARTBEAT_WEBHOOK,
+            json={"content": "Incarceration Bot Finished"},
+            timeout=5,
+        )
     logger.success("Bot Finished")
 
 
