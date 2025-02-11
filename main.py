@@ -67,7 +67,7 @@ def run():
 
 if __name__ == "__main__":
     logger.remove()
-    logger.add(LOG_FILE, level=LOG_LEVEL)
+    logger.add(sys.stdout, level=LOG_LEVEL)
     db.Base.metadata.create_all(db.db)
     session = db.Session()
     update_jails_db(session)
@@ -80,5 +80,6 @@ if __name__ == "__main__":
         for time_to_run in run_schedule:
             schedule.every().day.at(time_to_run).do(run)
         while True:
+            logger.info("Running Scheduled Jobs")
             schedule.run_pending()
-            time.sleep(60)
+            time.sleep(20)
