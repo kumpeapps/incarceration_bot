@@ -80,6 +80,6 @@ if __name__ == "__main__":
         for time_to_run in run_schedule:
             schedule.every().day.at(time_to_run).do(run)
         while True:
-            logger.info("Running Scheduled Jobs")
+            logger.debug("Running Scheduled Jobs")
             schedule.run_pending()
             time.sleep(int(LOOP_DELAY))
