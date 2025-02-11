@@ -1,8 +1,8 @@
 FROM python:3.11-slim
-
-COPY . /app
+ENV PYTHONUNBUFFERED=1
 WORKDIR /app
+COPY . /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-ENTRYPOINT [ "python", "main.py && tail -f incarceration_bot.log" ]
+CMD [ "python", "main.py && tail -f incarceration_bot.log" ]
