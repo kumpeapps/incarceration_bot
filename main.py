@@ -20,7 +20,7 @@ enable_jails_containing: list = os.getenv("ENABLE_JAILS_CONTAINING", "-").split(
 is_on_demand: bool = True if os.getenv("ON_DEMAND", "False") == "True" else False
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
-
+LOG_FILE = os.getenv("LOG_FILE", "incarceration_bot.log")
 
 def enable_jails(session: Session):
     """Enable Jails"""
@@ -67,7 +67,7 @@ def run():
 
 if __name__ == "__main__":
     logger.remove()
-    logger.add("incarceration_bot.log", level=LOG_LEVEL)
+    logger.add(LOG_FILE, level=LOG_LEVEL)
     db.Base.metadata.create_all(db.db)
     session = db.Session()
     update_jails_db(session)
