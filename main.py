@@ -20,7 +20,7 @@ enable_jails_containing: list = os.getenv("ENABLE_JAILS_CONTAINING", "-").split(
 is_on_demand: bool = True if os.getenv("ON_DEMAND", "False") == "True" else False
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
-LOOP_DELAY = int(os.getenv("LOOP_DELAY", 20))
+LOOP_DELAY = int(os.getenv("LOOP_DELAY", "20"))
 
 def enable_jails(session: Session):
     """Enable Jails"""
@@ -82,4 +82,4 @@ if __name__ == "__main__":
         while True:
             logger.info("Running Scheduled Jobs")
             schedule.run_pending()
-            time.sleep(LOOP_DELAY)
+            time.sleep(int(LOOP_DELAY))
