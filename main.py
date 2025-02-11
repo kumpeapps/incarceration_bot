@@ -67,7 +67,7 @@ def run():
 
 if __name__ == "__main__":
     logger.remove()
-    logger.add(sys.stderr, level=LOG_LEVEL)
+    logger.add("incarceration_bot.log", level=LOG_LEVEL)
     db.Base.metadata.create_all(db.db)
     session = db.Session()
     update_jails_db(session)
