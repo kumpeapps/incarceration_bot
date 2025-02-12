@@ -21,6 +21,7 @@ is_on_demand: bool = True if os.getenv("ON_DEMAND", "False") == "True" else Fals
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
 LOOP_DELAY = int(os.getenv("LOOP_DELAY", "20"))
+LOG_FILE = os.getenv("LOG_FILE", None)
 
 def enable_jails(session: Session):
     """Enable Jails"""
@@ -68,6 +69,8 @@ def run():
 if __name__ == "__main__":
     logger.remove()
     logger.add(sys.stdout, level=LOG_LEVEL)
+    if LOG_FILE:
+        logger.add(LOG_FILE, level=LOG_LEVEL)
     db.Base.metadata.create_all(db.db)
     session = db.Session()
     update_jails_db(session)
