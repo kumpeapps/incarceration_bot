@@ -6,6 +6,7 @@ from loguru import logger
 from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
+from helpers.insert_ignore import insert_ignore
 
 
 def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
@@ -29,9 +30,15 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                 logger.info(f"Matched {monitor.name} to {inmate.name}")
                 if monitor.name != inmate.name:
                     logger.info(f"Checking for full name match for {monitor.name}")
-                    full_name_monitor = session.query(Monitor).filter(Monitor.name == inmate.name).first()
+                    full_name_monitor = (
+                        session.query(Monitor)
+                        .filter(Monitor.name == inmate.name)
+                        .first()
+                    )
                     if full_name_monitor:
-                        logger.info(f"Found full name match for {inmate.name}, Skipping partial match")
+                        logger.info(
+                            f"Found full name match for {inmate.name}, Skipping partial match"
+                        )
                         skip = True
                     else:
                         logger.info("No full name match found.")
@@ -67,11 +74,14 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                     logger.info(f"New release date for {monitor.name}")
                     monitor.release_date = inmate.release_date
                     monitor.send_message(inmate, released=True)
-        session.add(inmate)
         try:
-            session.commit()
-        except IntegrityError:
-            session.rollback()
+            insert_ignore(session, Inmate, inmate.to_dict())
+        except NotImplementedError:
+            try:
+                session.add(inmate)
+            except IntegrityError:
+                session.rollback()
+    session.commit()
 
     jail.update_last_scrape_date()
     session.commit()
