@@ -1,0 +1,20 @@
+[Unit]
+Description=Bot
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+#RemainAfterExit=true
+KillSignal=SIGINT
+TimeoutStopSec=30
+User=bot
+Group=bot
+WorkingDirectory=/home/bot
+ExecStart=/usr/bin/docker compose up --pull always
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
