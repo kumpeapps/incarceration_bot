@@ -1,8 +1,11 @@
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
+from models.Jail import Jail  # pylint: disable=unused-import
+from models.Inmate import Inmate  # pylint: disable=unused-import
+from models.Monitor import Monitor  # pylint: disable=unused-import
 
 
 mysql_server: str = os.getenv("MYSQL_SERVER", "")
@@ -14,6 +17,12 @@ database_uri: str = os.getenv(
     "DATABASE_URI",
     f"mysql+pymysql://{mysql_username}:{mysql_password}@{mysql_server}:{mysql_port}/{mysql_database}",
 )
-db = create_engine(database_uri)
-Base = declarative_base()
-Session = sessionmaker(bind=db)
+
+
+def new_session() -> Session:
+    """Create a new session"""
+    db = create_engine(database_uri)
+    Base = declarative_base()
+    Base.metadata.create_all(db)
+    Session = sessionmaker(bind=db)
+    return Session()

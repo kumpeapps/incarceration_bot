@@ -45,7 +45,7 @@ def enable_jails(session: Session):
 def run():
     """Run the bot"""
     logger.info("Starting Bot")
-    session = db.Session()
+    session = db.new_session()
     if enable_jails_containing:
         enable_jails(session)
     jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
@@ -71,8 +71,7 @@ if __name__ == "__main__":
     logger.add(sys.stdout, level=LOG_LEVEL)
     if LOG_FILE:
         logger.add(LOG_FILE, level=LOG_LEVEL)
-    db.Base.metadata.create_all(db.db)
-    session = db.Session()
+    session = db.new_session()
     update_jails_db(session)
     session.close()
     if is_on_demand:
