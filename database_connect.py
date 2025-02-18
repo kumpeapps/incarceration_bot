@@ -3,9 +3,6 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
-from models.Jail import Jail  # pylint: disable=unused-import
-from models.Inmate import Inmate  # pylint: disable=unused-import
-from models.Monitor import Monitor  # pylint: disable=unused-import
 
 
 mysql_server: str = os.getenv("MYSQL_SERVER", "")
