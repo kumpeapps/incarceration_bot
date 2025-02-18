@@ -15,11 +15,11 @@ database_uri: str = os.getenv(
     f"mysql+pymysql://{mysql_username}:{mysql_password}@{mysql_server}:{mysql_port}/{mysql_database}",
 )
 
+Base = declarative_base()
 
 def new_session() -> Session:
     """Create a new session"""
     db = create_engine(database_uri)
-    Base = declarative_base()
     Base.metadata.create_all(db)
     Session = sessionmaker(bind=db)
     return Session()
