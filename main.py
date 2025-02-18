@@ -52,9 +52,9 @@ def run():
     for jail in jails:
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
-            scrape_zuercherportal(session, jail)
+            scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
         elif jail.scrape_system == "washington_so_ar":
-            scrape_washington_so_ar(session, jail)
+            scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
     session.close()
     if HEARTBEAT_WEBHOOK:
         logger.info("Sending Webhook Notification")
