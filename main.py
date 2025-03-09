@@ -6,6 +6,7 @@ import sys
 import schedule
 import requests  # type: ignore
 from loguru import logger
+from opentelemetry import trace, metrics
 from sqlalchemy.orm import Session
 from models.Jail import Jail
 from scrapes.zuercher import scrape_zuercherportal
@@ -23,10 +24,8 @@ HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
 LOOP_DELAY = int(os.getenv("LOOP_DELAY", "20"))
 LOG_FILE = os.getenv("LOG_FILE", None)
 ENABLE_OTEL: bool = True if os.getenv("ENABLE_OTEL", "False") == "True" else False
-if ENABLE_OTEL:
-    from opentelemetry import trace, metrics
-    tracer = trace.get_tracer("incarcerationbot.tracer")
-    meter = metrics.get_meter("incarcerationbot.meter")
+tracer = trace.get_tracer("incarcerationbot.tracer")
+meter = metrics.get_meter("incarcerationbot.meter")
 
 def enable_jails(session: Session):
     """Enable Jails"""
@@ -49,26 +48,37 @@ def enable_jails(session: Session):
 
 def run():
     """Run the bot"""
-    logger.info("Starting Bot")
-    session = db.new_session()
-    if enable_jails_containing:
-        enable_jails(session)
-    jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
-    for jail in jails:
-        logger.debug(f"Preparing {jail.jail_name}")
-        if jail.scrape_system == "zuercherportal":
-            scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
-        elif jail.scrape_system == "washington_so_ar":
-            scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
-    session.close()
-    if HEARTBEAT_WEBHOOK:
-        logger.info("Sending Webhook Notification")
-        requests.post(
-            HEARTBEAT_WEBHOOK,
-            json={"content": "Incarceration Bot Finished"},
-            timeout=5,
+    with tracer.start_as_current_span("incarcerationbot.run") as span:
+        logger.info("Starting Bot")
+        session = db.new_session()
+        if enable_jails_containing:
+            enable_jails(session)
+        jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+        enabled_jail_count = meter.create_counter(
+            "enabled_jail_count", "Number of Enabled Jails"
         )
-    logger.success("Bot Finished")
+        enabled_jail_count.add(len(jails))
+        jails_scraped_count = meter.create_counter(
+            "jails_scraped_count", "Number of Jails Scraped"
+        )
+        jails_scraped_count.add(0)
+        for jail in jails:
+            logger.debug(f"Preparing {jail.jail_name}")
+            if jail.scrape_system == "zuercherportal":
+                scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
+                jails_scraped_count.add(1)
+            elif jail.scrape_system == "washington_so_ar":
+                scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+                jails_scraped_count.add(1)
+        session.close()
+        if HEARTBEAT_WEBHOOK:
+            logger.info("Sending Webhook Notification")
+            requests.post(
+                HEARTBEAT_WEBHOOK,
+                json={"content": "Incarceration Bot Finished"},
+                timeout=5,
+            )
+        logger.success("Bot Finished")
 
 
 if __name__ == "__main__":
