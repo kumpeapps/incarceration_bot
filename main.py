@@ -22,6 +22,10 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
 LOOP_DELAY = int(os.getenv("LOOP_DELAY", "20"))
 LOG_FILE = os.getenv("LOG_FILE", None)
+ENABLE_OTEL = os.getenv("ENABLE_OTEL", "False")
+if ENABLE_OTEL == "True":
+    from opentelemetry import trace
+    tracer = trace.get_tracer("incarcerationbot.tracer")
 
 def enable_jails(session: Session):
     """Enable Jails"""
