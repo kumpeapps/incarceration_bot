@@ -22,11 +22,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
 LOOP_DELAY = int(os.getenv("LOOP_DELAY", "20"))
 LOG_FILE = os.getenv("LOG_FILE", None)
-ENABLE_OTEL: bool = True if os.getenv("ENABLE_OTEL", "False") == "True" else False
-if ENABLE_OTEL:
-    from opentelemetry import trace, metrics
-    tracer = trace.get_tracer("incarcerationbot.tracer")
-    meter = metrics.get_meter("incarcerationbot.meter")
+
 
 def enable_jails(session: Session):
     """Enable Jails"""
@@ -54,18 +50,50 @@ def run():
     if enable_jails_containing:
         enable_jails(session)
     jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+    jails_completed = 0
+    jails_total = len(jails)
+    logger.info(f"Running for {jails_total} Jails")
     for jail in jails:
+        def run_scrape(scrape_method, session, jail):
+            try:
+                scrape_method(session, jail, log_level=LOG_LEVEL)
+            except Exception:
+                logger.exception(f"Failed to scrape {jail.jail_name}")
+
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
-            scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
+            run_scrape(scrape_zuercherportal, session, jail)
         elif jail.scrape_system == "washington_so_ar":
-            scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+            run_scrape(scrape_washington_so_ar, session, jail)
+        if jail.scrape_system == "zuercherportal":
+            try:
+                scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
+            except Exception as e:
+                logger.error(f"Failed to scrape {jail.jail_name}")
+                logger.error(e)
+        elif jail.scrape_system == "washington_so_ar":
+            try:
+                scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+            except Exception as e:
+                logger.error(f"Failed to scrape {jail.jail_name}")
+                logger.error(e)
+        jails_completed += 1
+        logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     session.close()
     if HEARTBEAT_WEBHOOK:
         logger.info("Sending Webhook Notification")
+        if jails_completed == jails_total:
+            notify_message = f"{jails_completed} Jails Successfully Completed"
+        elif jails_completed == 0:
+            notify_message = f"{jails_total} Jails Failed"
+        else:
+            notify_message = (
+                f"Partial Success ({jails_total - jails_completed} Degraded)"
+            )
+
         requests.post(
             HEARTBEAT_WEBHOOK,
-            json={"content": "Incarceration Bot Finished"},
+            json={"content": notify_message},
             timeout=5,
         )
     logger.success("Bot Finished")
