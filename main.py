@@ -54,7 +54,17 @@ def run():
     jails_total = len(jails)
     logger.info(f"Running for {jails_total} Jails")
     for jail in jails:
+        def run_scrape(scrape_method, session, jail):
+            try:
+                scrape_method(session, jail, log_level=LOG_LEVEL)
+            except Exception:
+                logger.exception(f"Failed to scrape {jail.jail_name}")
+
         logger.debug(f"Preparing {jail.jail_name}")
+        if jail.scrape_system == "zuercherportal":
+            run_scrape(scrape_zuercherportal, session, jail)
+        elif jail.scrape_system == "washington_so_ar":
+            run_scrape(scrape_washington_so_ar, session, jail)
         if jail.scrape_system == "zuercherportal":
             try:
                 scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
