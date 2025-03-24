@@ -23,6 +23,7 @@ HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
 LOOP_DELAY = int(os.getenv("LOOP_DELAY", "20"))
 LOG_FILE = os.getenv("LOG_FILE", None)
 
+
 def enable_jails(session: Session):
     """Enable Jails"""
     logger.info("Enabling/Disabling Jails")
@@ -49,18 +50,40 @@ def run():
     if enable_jails_containing:
         enable_jails(session)
     jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+    jails_completed = 0
+    jails_total = len(jails)
+    logger.info(f"Running for {jails_total} Jails")
     for jail in jails:
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
-            scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
+            try:
+                scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
+            except Exception as e:
+                logger.error(f"Failed to scrape {jail.jail_name}")
+                logger.error(e)
         elif jail.scrape_system == "washington_so_ar":
-            scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+            try:
+                scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+            except Exception as e:
+                logger.error(f"Failed to scrape {jail.jail_name}")
+                logger.error(e)
+        jails_completed += 1
+        logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     session.close()
     if HEARTBEAT_WEBHOOK:
         logger.info("Sending Webhook Notification")
+        if jails_completed == jails_total:
+            notify_message = f"{jails_completed} Jails Successfully Completed"
+        elif jails_completed == 0:
+            notify_message = f"{jails_total} Jails Failed"
+        else:
+            notify_message = (
+                f"Partial Success ({jails_total - jails_completed} Degraded)"
+            )
+
         requests.post(
             HEARTBEAT_WEBHOOK,
-            json={"content": "Incarceration Bot Finished"},
+            json={"content": notify_message},
             timeout=5,
         )
     logger.success("Bot Finished")
