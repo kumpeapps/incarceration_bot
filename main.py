@@ -52,6 +52,8 @@ def run():
     jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
     jails_completed = 0
     jails_total = len(jails)
+    success_jails = []
+    failed_jails = []
     logger.info(f"Running for {jails_total} Jails")
     for jail in jails:
         def run_scrape(scrape_method, session, jail):
@@ -69,16 +71,20 @@ def run():
             try:
                 scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
                 jails_completed += 1
+                success_jails.append(jail.jail_name)
             except Exception as e:
                 logger.error(f"Failed to scrape {jail.jail_name}")
                 logger.error(e)
+                failed_jails.append(jail.jail_name)
         elif jail.scrape_system == "washington_so_ar":
             try:
                 scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
                 jails_completed += 1
+                success_jails.append(jail.jail_name)
             except Exception as e:
                 logger.error(f"Failed to scrape {jail.jail_name}")
                 logger.error(e)
+                failed_jails.append(jail.jail_name)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     session.close()
     if HEARTBEAT_WEBHOOK:
@@ -94,7 +100,8 @@ def run():
 
         requests.post(
             HEARTBEAT_WEBHOOK,
-            json={"content": notify_message},
+            json={"message": notify_message, "jails_completed": success_jails, "failed_jails": failed_jails},
+            headers={"Content-Type": "application/json"},
             timeout=5,
         )
     logger.success("Bot Finished")
