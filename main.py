@@ -68,16 +68,17 @@ def run():
         if jail.scrape_system == "zuercherportal":
             try:
                 scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
+                jails_completed += 1
             except Exception as e:
                 logger.error(f"Failed to scrape {jail.jail_name}")
                 logger.error(e)
         elif jail.scrape_system == "washington_so_ar":
             try:
                 scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+                jails_completed += 1
             except Exception as e:
                 logger.error(f"Failed to scrape {jail.jail_name}")
                 logger.error(e)
-        jails_completed += 1
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     session.close()
     if HEARTBEAT_WEBHOOK:
