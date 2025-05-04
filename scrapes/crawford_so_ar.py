@@ -1,6 +1,7 @@
 """Web Scraper for Crawford County AR Jail"""
 
 from datetime import datetime
+import base64  # type: ignore
 import requests  # type: ignore
 import bs4  # type: ignore
 
@@ -12,6 +13,31 @@ from models.Inmate import Inmate
 from scrapes.process import process_scrape_data
 
 URL = "https://inmates.crawfordcountysheriff.org"
+
+
+def image_url_to_base64(image_url):
+    """
+    Fetches an image from a URL and returns its Base64 representation.
+
+    Args:
+        image_url: The URL of the image.
+
+    Returns:
+        A string containing the Base64 encoded image data, or None if an error occurs.
+    """
+    try:
+        response = requests.get(image_url, stream=True)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+
+        image_data = response.content
+        base64_encoded = base64.b64encode(image_data).decode("utf-8")
+        return base64_encoded
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching image from URL: {e}")
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
 
 
 def scrape_inmate_data(details_path: str) -> dict:
@@ -33,6 +59,9 @@ def scrape_inmate_data(details_path: str) -> dict:
     details_url = f"{URL}{details_path}"
     req = requests.get(details_url, timeout=30)
     soup = bs4.BeautifulSoup(req.text, "html.parser")
+    images = soup.find_all("img")
+    mugshot_url = images[1]["src"]
+    mugshot = image_url_to_base64(mugshot_url)
     inmate_table = soup.find_all("table")[0]
     inmate_rows = inmate_table.find_all("tr")
     name = inmate_rows[0].text.strip()
@@ -63,11 +92,14 @@ def scrape_inmate_data(details_path: str) -> dict:
         "booking_date": booking_date.replace("Booking Date:", "").strip(),
         "arresting_agency": arresting_agency.replace("Arresting Agency:", "").strip(),
         "charges": charges,
+        "mugshot": mugshot,
     }
     return details
 
 
-def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO") -> None:
+def scrape_crawford_so_ar(
+    session: Session, jail: Jail, log_level: str = "INFO"
+) -> None:
     """
     Get Crawford County Inmate Data.
 
@@ -97,7 +129,7 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
         details = scrape_inmate_data(details_path)
 
         arrest_date = None
-        
+
         # Try different date formats
         date_formats = [
             "%m/%d/%Y %H:%M",  # 05/03/2025 14:26
@@ -108,12 +140,12 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
         booking_date = details["booking_date"]
         for date_format in date_formats:
             try:
-                arrest_date = datetime.strptime(
-                    booking_date, date_format
-                ).date()
+                arrest_date = datetime.strptime(booking_date, date_format).date()
                 break
             except ValueError as error:
-                logger.debug(f"Failed to parse date '{booking_date}' with format '{date_format}': {error}")
+                logger.debug(
+                    f"Failed to parse date '{booking_date}' with format '{date_format}': {error}"
+                )
 
         if arrest_date is None:
             logger.warning(
@@ -129,6 +161,7 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
             is_juvenile=False,
             held_for_agency=details["arresting_agency"],
             hold_reasons=details["charges"],
+            mugshot=details["mugshot"],
         )
         inmates.append(inmate)
     for inmate in inmates:
