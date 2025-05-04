@@ -61,6 +61,8 @@ def scrape_inmate_data(details_path: str) -> dict:
     soup = bs4.BeautifulSoup(req.text, "html.parser")
     images = soup.find_all("img")
     mugshot_url = images[1]["src"]
+    if mugshot_url.startswith("/"):
+        mugshot_url = f"{URL}{mugshot_url}"
     mugshot = image_url_to_base64(mugshot_url)
     inmate_table = soup.find_all("table")[0]
     inmate_rows = inmate_table.find_all("tr")
