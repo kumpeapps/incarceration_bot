@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from models.Jail import Jail
 from scrapes.zuercher import scrape_zuercherportal
 from scrapes.washington_so_ar import scrape_washington_so_ar
+from scrapes.crawford_so_ar import scrape_crawford_so_ar
 import database_connect as db
 from update_jails_db import update_jails_db
 
@@ -79,6 +80,15 @@ def run():
         elif jail.scrape_system == "washington_so_ar":
             try:
                 scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+                jails_completed += 1
+                success_jails.append(jail.jail_name)
+            except Exception as e:
+                logger.error(f"Failed to scrape {jail.jail_name}")
+                logger.error(e)
+                failed_jails.append(jail.jail_name)
+        elif jail.scrape_system == "crawford_so_ar":
+            try:
+                scrape_crawford_so_ar(session, jail, log_level=LOG_LEVEL)
                 jails_completed += 1
                 success_jails.append(jail.jail_name)
             except Exception as e:

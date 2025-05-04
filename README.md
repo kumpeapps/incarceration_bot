@@ -9,6 +9,7 @@ This bot is a docker container for scraping jail websites and saving inmate data
     - Benton County
     - Pulaski County
     - Washington County
+    - Crawford County
 
 ### Example Docker Compose File
 ```
@@ -28,6 +29,6 @@ services:
       # - PUSHOVER_SOUND=<pushover_sound> # Pushover default used if not specified
       # - RUN_SCHEDULE=<hours to run in 00:00 format comma-separated> # If not specified default is 01:00,05:00,09:00,13:00,17:00,21:00
       # - ENABLE_JAILS_CONTAINING=<comma-separated list of jails to enable> # this enables jails that contain specified strings. Default is all jails enabled. Example: for all jails (in our database) in AR input ar.
-      # - ON_DEMAND=<True/False> # Default is false. Set this to True to bypass schedule running all enabled jails immediately then exit.
+      # - ON_DEMAND=<True/False> # Default is False. Set this to True to bypass schedule running all enabled jails immediately then exit.
       # - HEARTBEAT_WEBHOOK=<webhook_url> # Optional. Sends POST to given webhook at end of each run cycle.
 ```
