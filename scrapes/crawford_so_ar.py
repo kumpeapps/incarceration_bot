@@ -132,7 +132,7 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
             jail_id=jail.jail_id,
             is_juvenile=False,
             held_for_agency=details["arresting_agency"],
-            hold_for_reason=details["charges"],
+            hold_reasons=details["charges"],
         )
         inmates.append(inmate)
     for inmate in inmates:
