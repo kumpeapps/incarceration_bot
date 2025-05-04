@@ -133,6 +133,7 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
             is_juvenile=False,
         )
         inmates.append(inmate)
-    logger.debug(inmates)
+    for inmate in inmates:
+        logger.debug(f"Scraped inmate: {inmate.name}")
     logger.success(f"Found {len(inmates)} inmates.")
     process_scrape_data(session, inmates, jail)
