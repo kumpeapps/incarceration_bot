@@ -105,19 +105,19 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
             "%Y-%m-%d %H:%M",  # 2025-05-03 14:26
             "%Y-%m-%d",  # 2025-05-03
         ]
-
+        booking_date = details["booking_date"]
         for date_format in date_formats:
             try:
                 arrest_date = datetime.strptime(
-                    details["booking_date"], date_format
+                    booking_date, date_format
                 ).date()
                 break
             except ValueError as error:
-                logger.debug(f"Failed to parse date '{details["booking_date"]}' with format '{date_format}': {error}")
+                logger.debug(f"Failed to parse date '{booking_date}' with format '{date_format}': {error}")
 
         if arrest_date is None:
             logger.warning(
-                f"Could not parse booking date: '{details['booking_date']}' (cleaned: '{details["booking_date"]}') - tried formats: {date_formats}"
+                f"Could not parse booking date: '{details['booking_date']}' (cleaned: '{booking_date}') - tried formats: {date_formats}"
             )
 
         inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
