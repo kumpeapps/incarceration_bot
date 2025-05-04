@@ -129,7 +129,7 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
             race=race,
             sex=sex,
             arrest_date=arrest_date,
-            jail_id="crawford_so_ar",
+            jail_id=jail.jail_id,
             is_juvenile=False,
         )
         inmates.append(inmate)

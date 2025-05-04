@@ -78,6 +78,7 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
         try:
             insert_ignore(session, Inmate, inmate.to_dict())
         except NotImplementedError as error:
+            logger.debug(f"Insert ignore not implemented: {error}")
             try:
                 session.add(inmate)
             except IntegrityError:
