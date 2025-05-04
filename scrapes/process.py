@@ -77,6 +77,7 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                     monitor.send_message(inmate, released=True)
         try:
             insert_ignore(session, Inmate, inmate.to_dict())
+            logger.debug(f"Inserted inmate: {inmate.name}")
         except NotImplementedError as error:
             logger.debug(f"Insert ignore not implemented: {error}")
             try:
