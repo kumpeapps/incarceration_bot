@@ -31,5 +31,16 @@
         "created_date": "2025-02-07",
         "updated_date": "2025-02-07",
         "last_scrape_date": "2025-02-08"
+    },
+    {
+        "id": 4,
+        "jail_name": "Crawford County AR Jail",
+        "state": "AR",
+        "jail_id": "crawford-so-ar",
+        "scrape_system": "crawford_so_ar",
+        "active": true,
+        "created_date": "2025-05-04",
+        "updated_date": "2025-05-04",
+        "last_scrape_date": "2025-05-04"
     }
 ]
