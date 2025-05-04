@@ -60,7 +60,7 @@ def scrape_inmate_data(details_path: str) -> dict:
         "height": height,
         "weight": weight,
         "residence": residence,
-        "booking_date": booking_date,
+        "booking_date": booking_date.replace("Booking Date:", "").strip(),
         "arresting_agency": arresting_agency.replace("Arresting Agency:", "").strip(),
         "charges": charges,
     }
@@ -97,11 +97,7 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
         details = scrape_inmate_data(details_path)
 
         arrest_date = None
-        # Clean up the booking date by removing any prefix
-        cleaned_booking_date = (
-            details["booking_date"].replace("Booking Date:", "").strip()
-        )
-
+        
         # Try different date formats
         date_formats = [
             "%m/%d/%Y %H:%M",  # 05/03/2025 14:26
@@ -113,15 +109,15 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
         for date_format in date_formats:
             try:
                 arrest_date = datetime.strptime(
-                    cleaned_booking_date, date_format
+                    details["booking_date"], date_format
                 ).date()
                 break
             except ValueError as error:
-                logger.debug(f"Failed to parse date '{cleaned_booking_date}' with format '{date_format}': {error}")
+                logger.debug(f"Failed to parse date '{details["booking_date"]}' with format '{date_format}': {error}")
 
         if arrest_date is None:
             logger.warning(
-                f"Could not parse booking date: '{details['booking_date']}' (cleaned: '{cleaned_booking_date}') - tried formats: {date_formats}"
+                f"Could not parse booking date: '{details['booking_date']}' (cleaned: '{details["booking_date"]}') - tried formats: {date_formats}"
             )
 
         inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
