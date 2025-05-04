@@ -64,7 +64,8 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                     monitor.send_message(inmate)
                     try:
                         session.commit()
-                    except IntegrityError:
+                    except IntegrityError as error:
+                        logger.debug(f"Failed to commit new monitor: {error}")
                         session.rollback()
                 elif (
                     inmate.release_date
@@ -76,10 +77,11 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                     monitor.send_message(inmate, released=True)
         try:
             insert_ignore(session, Inmate, inmate.to_dict())
-        except NotImplementedError:
+        except NotImplementedError as error:
             try:
                 session.add(inmate)
             except IntegrityError:
+                logger.debug(f"Failed to add inmate: {error}")
                 session.rollback()
     session.commit()
 

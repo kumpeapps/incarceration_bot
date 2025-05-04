@@ -31,7 +31,6 @@ def scrape_inmate_data(details_path: str) -> dict:
         arresting_agency, and charges.
     """
     details_url = f"{URL}{details_path}"
-    print(f"Details URL: {details_url}")
     req = requests.get(details_url, timeout=30)
     soup = bs4.BeautifulSoup(req.text, "html.parser")
     inmate_table = soup.find_all("table")[0]
@@ -53,7 +52,6 @@ def scrape_inmate_data(details_path: str) -> dict:
         charge = charge_cells[0].text.strip()
         bond = charge_cells[1].text.strip()
         charges += f"{charge} - Bond: {bond}\n"
-    print(charges)
     details: dict = {
         "name": name,
         "inmate_id": inmate_id,
@@ -97,10 +95,6 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
         sex = cells[2].text.strip()
         sex = "Male" if sex == "M" else "Female" if sex == "F" else sex
         details = scrape_inmate_data(details_path)
-        print(f"Name: {name}\nRace: {race}\nSex: {sex}\nDetails Path: {details_path}")
-
-        # Print raw booking date for debugging
-        print(f"Raw booking date: '{details['booking_date']}'")
 
         arrest_date = None
         # Clean up the booking date by removing any prefix
@@ -122,15 +116,14 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
                     cleaned_booking_date, date_format
                 ).date()
                 break
-            except ValueError:
-                continue
+            except ValueError as error:
+                logger.debug(f"Failed to parse date '{cleaned_booking_date}' with format '{date_format}': {error}")
 
         if arrest_date is None:
             logger.warning(
                 f"Could not parse booking date: '{details['booking_date']}' (cleaned: '{cleaned_booking_date}') - tried formats: {date_formats}"
             )
 
-        print(f"Arrest Date: {arrest_date}")
         inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=name,
             race=race,
@@ -140,5 +133,6 @@ def scrape_crawford_so_ar(session: Session, jail: Jail, log_level: str = "INFO")
             is_juvenile=False,
         )
         inmates.append(inmate)
+    logger.debug(inmates)
     logger.success(f"Found {len(inmates)} inmates.")
     process_scrape_data(session, inmates, jail)
