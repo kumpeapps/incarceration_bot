@@ -5,11 +5,12 @@ This bot is a docker container for scraping jail websites and saving inmate data
 
 ### Current Jails
 ##### Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it pretty quickly). Other jails need to figure out how to scrape the website first
-- In Arkansas
-    - Benton County
-    - Pulaski County
-    - Washington County
-    - Crawford County
+| State    | Jail              | Jail ID          | Added In Version |
+|----------|-------------------|------------------|------------------|
+| Arkansas | Benton County     | benton-co-ar     | 1.0.0            |
+| Arkansas | Pulaski County    | pulaski-co-ar    | 1.0.0            |
+| Arkansas | Washington County | washington-co-ar | 2.0.0            |
+| Arkansas | Crawford County   | crawford-co-ar   | 2.1.0            |
 
 ### Example Docker Compose File
 ```
