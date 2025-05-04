@@ -61,7 +61,7 @@ def scrape_inmate_data(details_path: str) -> dict:
         "weight": weight,
         "residence": residence,
         "booking_date": booking_date,
-        "arresting_agency": arresting_agency,
+        "arresting_agency": arresting_agency.replace("Arresting Agency:", "").strip(),
         "charges": charges,
     }
     return details
