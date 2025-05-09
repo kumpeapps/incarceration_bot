@@ -7,6 +7,7 @@ from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
 from helpers.insert_ignore import insert_ignore
+from datetime import datetime
 
 
 def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
@@ -47,6 +48,7 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                     if monitor.name == inmate.name:
                         logger.trace(f"Found exact match for {monitor.name}")
                         monitor.arrest_date = inmate.arrest_date
+                        monitor.last_seen_incarcerated = datetime.now() # type: ignore
                     else:
                         logger.trace(f"Found partial match for {monitor.name}.")
                         logger.success(f"Creating new monitor for {inmate.name}")
@@ -59,6 +61,7 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                             enable_notifications=monitor.enable_notifications,
                             notify_method=monitor.notify_method,
                             notify_address=monitor.notify_address,
+                            last_seen_incarcerated=datetime.now(),
                         )
                         session.add(new_monitor)
                     monitor.send_message(inmate)

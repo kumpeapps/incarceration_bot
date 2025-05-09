@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Date,
+    TIMESTAMP
 )
 from database_connect import Base
 from models.Inmate import Inmate
@@ -51,6 +52,7 @@ class Monitor(Base):
     enable_notifications = Column(Integer, nullable=False, default=1)
     notify_method = Column(String(255), nullable=True, default="pushover")
     notify_address = Column(String(255), nullable=False, default="")
+    last_seen_incarcerated = Column(TIMESTAMP, nullable=True, default=None)
 
     def to_dict(self) -> dict:
         """Converts the object to a dictionary"""
@@ -66,6 +68,7 @@ class Monitor(Base):
             "enable_notifications": self.enable_notifications,
             "notify_method": self.notify_method,
             "notify_address": self.notify_address,
+            "last_seen_incarcerated": self.last_seen_incarcerated,
         }
 
     def send_message(self, inmate: Inmate, released: bool = False):
