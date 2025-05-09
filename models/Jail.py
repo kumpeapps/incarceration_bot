@@ -1,7 +1,7 @@
 """Jail Model"""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from loguru import logger
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     Boolean,
     Date,
+    TIMESTAMP
 )
 from database_connect import Base
 from models.Inmate import Inmate
@@ -44,6 +45,7 @@ class Jail(Base):  # type: ignore
     created_date = Column(Date, nullable=False, default=date.today())
     updated_date = Column(Date, nullable=False, default=date.today())
     last_scrape_date = Column(Date, nullable=True)
+    last_successful_scrape = Column(TIMESTAMP, nullable=True, default=None)
 
     inmates = relationship("Inmate", back_populates="jail")
 
@@ -70,3 +72,4 @@ class Jail(Base):  # type: ignore
         """Update the last scrape date"""
         logger.info(f"Updating last scrape date for {self.jail_name}")
         self.last_scrape_date = date.today()
+        self.last_successful_scrape = datetime.now()  # type: ignore
