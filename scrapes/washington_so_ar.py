@@ -71,9 +71,11 @@ def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO
     table = soup.find_all("table")[0]
     rows = table.find_all("tr")
     inmates: list[Inmate] = []
+    logger.debug(f"Found {len(rows)} rows in the table.")
     for row in rows[2:]:
         cells = row.find_all("td")
         name = cells[0].text.strip()
+        logger.debug(f"Scraping inmate: {name}")
         # age = cells[1].text.strip()
         race = cells[2].text.strip()
         sex = cells[3].text.strip()
@@ -101,5 +103,6 @@ def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO
             hold_reasons=details["charges"],
         )
         inmates.append(inmate)
+        logger.debug(f"Added inmate: {name} with arrest date: {arrest_date}")
     logger.success(f"Found {len(inmates)} inmates.")
     process_scrape_data(session, inmates, jail)
