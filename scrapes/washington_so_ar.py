@@ -1,7 +1,6 @@
 """Web Scraper for Washington County AR Jail"""
 
 from datetime import datetime
-import base64  # type: ignore
 import requests  # type: ignore
 import bs4  # type: ignore
 from sqlalchemy.orm import Session
@@ -103,5 +102,4 @@ def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO
         )
         inmates.append(inmate)
     logger.success(f"Found {len(inmates)} inmates.")
-    if session:
-        process_scrape_data(session, inmates, jail)
+    process_scrape_data(session, inmates, jail)
