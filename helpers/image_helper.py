@@ -15,7 +15,7 @@ def image_url_to_base64(image_url):
         A string containing the Base64 encoded image data, or None if an error occurs.
     """
     try:
-        response = requests.get(image_url, stream=True)
+        response = requests.get(image_url, stream=True, timeout=30)
         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
         image_data = response.content

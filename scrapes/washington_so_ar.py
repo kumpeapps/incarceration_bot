@@ -13,11 +13,12 @@ from helpers.image_helper import image_url_to_base64
 
 URL = "https://www.washcosoar.gov/res/DetaineeAlphaRoster.aspx"
 
+
 def scrape_inmate_data(details_path: str) -> dict:
     """
     Scrape detailed inmate information from a specific inmate's detail page.
 
-    This function retrieves the mugshot, charges, and responsible department 
+    This function retrieves the mugshot, charges, and responsible department
     for an inmate from their detail page.
 
     Args:
@@ -46,11 +47,12 @@ def scrape_inmate_data(details_path: str) -> dict:
         charges += f"{charge} - {bond}\n"
         department = charge_cells[3].text.strip()
     details = {
-        mugshot: mugshot,
-        charges: charges,
-        department: department,
+        "mugshot": mugshot,
+        "charges": charges,
+        "department": department,
     }
     return details
+
 
 def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO"):
     """
