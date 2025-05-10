@@ -1,5 +1,6 @@
 """Process scraped data"""
 
+from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
@@ -7,7 +8,6 @@ from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
 from helpers.insert_ignore import insert_ignore
-from datetime import datetime
 
 
 def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
