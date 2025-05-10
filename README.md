@@ -9,7 +9,7 @@ This bot is a docker container for scraping jail websites and saving inmate data
 |----------|-------------------|------------------|------------------|-----------------------------|
 | Arkansas | Benton County     | benton-co-ar     | 1.0.0            | :white_check_mark:          |
 | Arkansas | Pulaski County    | pulaski-co-ar    | 1.0.0            | :white_check_mark:          |
-| Arkansas | Washington County | washington-co-ar | 2.0.0            | :x:                         |
+| Arkansas | Washington County | washington-co-ar | 2.0.0            | :white_check_mark: (2.1.3+) |
 | Arkansas | Crawford County   | crawford-co-ar   | 2.1.0            | :white_check_mark: (2.1.1+) |
 
 ### Example Docker Compose File
