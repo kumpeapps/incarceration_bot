@@ -65,12 +65,9 @@ class Inmate(Base):  # type: ignore
     is_juvenile = Column(Boolean, nullable=False, default=False)
     release_date = Column(String(255), nullable=False, default="")
     in_custody_date = Column(Date, nullable=False, default=date.today())
-    jail_id = Column(
-        String(255), ForeignKey("jails.jail_id"), nullable=False
-    )
+    jail_id = Column(String(255), ForeignKey("jails.jail_id"), nullable=False)
     hide_record = Column(Boolean, nullable=False, default=False)
     jail = relationship("Jail", back_populates="inmates")
-
 
     def __str__(self) -> str:
         return str(self.name)

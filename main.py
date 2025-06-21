@@ -2,12 +2,13 @@
 
 import time
 import os
+from datetime import datetime, timedelta
 import sys
 import schedule
 import requests  # type: ignore
 from loguru import logger
 from sqlalchemy.orm import Session
-from models.Jail import Jail
+from models.Jail import Jail, Inmate
 from scrapes.zuercher import scrape_zuercherportal
 from scrapes.washington_so_ar import scrape_washington_so_ar
 from scrapes.crawford_so_ar import scrape_crawford_so_ar
@@ -23,6 +24,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 HEARTBEAT_WEBHOOK = os.getenv("HEARTBEAT_WEBHOOK", None)
 LOOP_DELAY = int(os.getenv("LOOP_DELAY", "20"))
 LOG_FILE = os.getenv("LOG_FILE", None)
+DELETE_MUGSHOTS_AFTER_DAYS = int(os.getenv("DELETE_MUGSHOTS_AFTER_DAYS", "30"))
 
 
 def enable_jails(session: Session):
@@ -57,6 +59,7 @@ def run():
     failed_jails = []
     logger.info(f"Running for {jails_total} Jails")
     for jail in jails:
+
         def run_scrape(scrape_method, session, jail):
             try:
                 scrape_method(session, jail, log_level=LOG_LEVEL)
@@ -96,6 +99,7 @@ def run():
                 logger.error(e)
                 failed_jails.append(jail.jail_name)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
+    delete_old_mugshots(session)
     session.close()
     if HEARTBEAT_WEBHOOK:
         logger.info("Sending Webhook Notification")
@@ -110,11 +114,33 @@ def run():
 
         requests.post(
             HEARTBEAT_WEBHOOK,
-            json={"message": notify_message, "jails_completed": success_jails, "failed_jails": failed_jails},
+            json={
+                "message": notify_message,
+                "jails_completed": success_jails,
+                "failed_jails": failed_jails,
+            },
             headers={"Content-Type": "application/json"},
             timeout=5,
         )
     logger.success("Bot Finished")
+
+
+def delete_old_mugshots(session: Session):
+    """Delete old mugshots"""
+    logger.info("Deleting Old Mugshots")
+
+    cutoff_date = datetime.now() - timedelta(days=DELETE_MUGSHOTS_AFTER_DAYS)
+    query = (
+        session.query(Inmate)
+        .filter(
+            Inmate.mugshot.isnot(None),
+            Inmate.mugshot != "",
+            Inmate.in_custody_date < cutoff_date,
+        )
+    )
+    num_deleted = query.update({Inmate.mugshot: None}, synchronize_session=False)
+    session.commit()
+    logger.info(f"Deleted mugshots for {num_deleted} inmates.")
 
 
 if __name__ == "__main__":
