@@ -16,12 +16,12 @@ MarkupSafe==2.1.5
 PyMySQL==1.1.1
 python-dotenv==1.0.1
 pytz==2024.2
-requests==2.32.3
+requests==2.32.4
 schedule==1.2.2
 soupsieve==2.6
 SQLAlchemy==2.0.38
 typing_extensions==4.12.2
-urllib3==2.2.3
+urllib3==2.5.0
 Werkzeug==3.0.6
 zope.interface==7.0.3
 zuercherportal_api==1.0.3
