@@ -130,19 +130,17 @@ def delete_old_mugshots(session: Session):
     logger.info("Deleting Old Mugshots")
 
     cutoff_date = datetime.now() - timedelta(days=DELETE_MUGSHOTS_AFTER_DAYS)
-    inmates = (
+    query = (
         session.query(Inmate)
         .filter(
             Inmate.mugshot.isnot(None),
             Inmate.mugshot != "",
             Inmate.in_custody_date < cutoff_date,
         )
-        .all()
     )
-    for inmate in inmates:
-        logger.debug(f"Deleting mugshot for {inmate.name}")
-        inmate.mugshot = None  # type: ignore
+    num_deleted = query.update({Inmate.mugshot: None}, synchronize_session=False)
     session.commit()
+    logger.info(f"Deleted mugshots for {num_deleted} inmates.")
 
 
 if __name__ == "__main__":
