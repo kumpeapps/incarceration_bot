@@ -150,7 +150,7 @@ compare_scrapers(session, jail)
 ### Fallback Behavior
 
 The system automatically falls back in this order:
-1. Async scraping (fastest)
+
 2. Threading scraping (medium)
 3. Standard scraping (slowest but most compatible)
 

@@ -50,15 +50,14 @@ async def async_scrape_inmate_data(
                 logger.warning(f"Not enough images found in {details_path}")
                 return None
 
-            mugshot_url = images[4]["src"]
-            mugshot_url = f"https://www.washcosoar.gov/{mugshot_url}"
+            mugshot_url = f"https://www.washcosoar.gov/{images[4]['src']}"
 
             # Get mugshot asynchronously
             mugshot = await async_image_url_to_base64(session, mugshot_url)
 
             inmate_table = soup.find_all("table")[0]
             inmate_rows = inmate_table.find_all("tr")
-            charges = ""
+            charge_list = []
             department = ""
 
             for charge_row in inmate_rows[1:]:
@@ -66,15 +65,17 @@ async def async_scrape_inmate_data(
                 if len(charge_cells) >= 4:
                     charge = charge_cells[0].text.strip()
                     bond = charge_cells[1].text.strip()
-                    charges += f"{charge} - {bond}\n"
+                    charge_list.append(f"{charge} - {bond}")
                     department = charge_cells[3].text.strip()
+
+            charges = "\n".join(charge_list)
 
             return {
                 "mugshot": mugshot,
                 "charges": charges,
                 "department": department,
             }
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, IndexError) as e:
         logger.error(f"Error scraping inmate data from {details_path}: {e}")
         return None
 
@@ -106,7 +107,7 @@ async def async_image_url_to_base64(
                     f"Failed to fetch image {image_url}: HTTP {response.status}"
                 )
                 return None
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
         logger.error(f"Error fetching image from {image_url}: {e}")
         return None
 
@@ -124,13 +125,12 @@ def scrape_inmate_data_sync(details_path: str) -> Optional[Dict]:
             logger.warning(f"Not enough images found in {details_path}")
             return None
 
-        mugshot_url = images[4]["src"]
-        mugshot_url = f"https://www.washcosoar.gov/{mugshot_url}"
+        mugshot_url = f"https://www.washcosoar.gov/{images[4]['src']}"
         mugshot = image_url_to_base64(mugshot_url)
 
         inmate_table = soup.find_all("table")[0]
         inmate_rows = inmate_table.find_all("tr")
-        charges = ""
+        charge_list = []
         department = ""
 
         for charge_row in inmate_rows[1:]:
@@ -138,15 +138,17 @@ def scrape_inmate_data_sync(details_path: str) -> Optional[Dict]:
             if len(charge_cells) >= 4:
                 charge = charge_cells[0].text.strip()
                 bond = charge_cells[1].text.strip()
-                charges += f"{charge} - {bond}\n"
+                charge_list.append(f"{charge} - {bond}")
                 department = charge_cells[3].text.strip()
+
+        charges = "\n".join(charge_list)
 
         return {
             "mugshot": mugshot,
             "charges": charges,
             "department": department,
         }
-    except Exception as e:
+    except (requests.RequestException, ValueError, IndexError) as e:
         logger.error(f"Error scraping inmate data from {details_path}: {e}")
         return None
 
@@ -179,7 +181,7 @@ async def async_scrape_all_inmate_details(
         tasks = [bounded_scrape(url) for url in detail_urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Convert exceptions to None
+        # Convert exceptions to None and log them
         processed_results: List[Optional[Dict]] = []
         for result in results:
             if isinstance(result, Exception):
@@ -219,7 +221,7 @@ def scrape_with_threading(
             try:
                 result = future.result()
                 results[index] = result
-            except Exception as e:
+            except (requests.RequestException, ValueError, IndexError) as e:
                 logger.error(
                     f"Threading scrape failed for URL {detail_urls[index]}: {e}"
                 )
@@ -231,10 +233,8 @@ def scrape_with_threading(
 def scrape_washington_so_ar_optimized(
     session: Session,
     jail: Jail,
-    log_level: str = "INFO",
     use_async: bool = True,
     max_concurrent: int = 10,
-    batch_size: int = 50,
 ):
     """
     Optimized version of Washington County Inmate Data scraper.
@@ -242,10 +242,8 @@ def scrape_washington_so_ar_optimized(
     Args:
         session (Session): SQLAlchemy session for database operations.
         jail (Jail): Jail object containing jail details.
-        log_level (str): Logging level for the scraping process.
         use_async (bool): Whether to use async scraping (faster but requires aiohttp).
         max_concurrent (int): Maximum concurrent requests when using async.
-        batch_size (int): Number of inmates to process in each batch.
 
     Returns:
         None
@@ -273,13 +271,12 @@ def scrape_washington_so_ar_optimized(
         name = cells[0].text.strip()
         race = cells[2].text.strip()
         sex = cells[3].text.strip()
-        sex = "Male" if sex == "M" else "Female" if sex == "F" else sex
+        sex = {"M": "Male", "F": "Female"}.get(sex, sex)
         intake = cells[5].text.strip()
 
         urls = row.find_all("a")
         if urls:
-            details_url = urls[0]["href"]
-            details_url = f"https://www.washcosoar.gov/res/{details_url}"
+            details_url = f"https://www.washcosoar.gov/res/{urls[0]['href']}"
             detail_urls.append(details_url)
 
             try:
@@ -309,7 +306,7 @@ def scrape_washington_so_ar_optimized(
             detailed_data = asyncio.run(
                 async_scrape_all_inmate_details(detail_urls, max_concurrent)
             )
-        except Exception as e:
+        except (RuntimeError, OSError, asyncio.TimeoutError) as e:
             logger.error(f"Async scraping failed, falling back to threading: {e}")
             detailed_data = scrape_with_threading(
                 detail_urls, max_workers=min(5, len(detail_urls))
@@ -371,8 +368,15 @@ def scrape_washington_so_ar_optimized(
 
 
 # Backward compatibility - use optimized version by default
-def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO"):
+def scrape_washington_so_ar(
+    session: Session, jail: Jail, log_level: str = "INFO"
+):  # pylint: disable=unused-argument
     """
     Backward compatible wrapper that uses the optimized scraper.
+
+    Args:
+        session (Session): SQLAlchemy session for database operations.
+        jail (Jail): Jail object containing jail details.
+        log_level (str): Legacy parameter for backward compatibility (unused).
     """
-    return scrape_washington_so_ar_optimized(session, jail, log_level)
+    return scrape_washington_so_ar_optimized(session, jail)
