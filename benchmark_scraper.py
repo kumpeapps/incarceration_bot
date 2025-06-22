@@ -30,7 +30,7 @@ def benchmark_scraper(
     start_time = time.time()
     try:
         scraper_func(
-            session, jail, log_level="WARNING"
+            session, jail
         )  # Reduce logging for cleaner output
         end_time = time.time()
 
@@ -44,6 +44,7 @@ def benchmark_scraper(
             "error": None,
         }
     except Exception as e:
+        logger.exception(f"{scraper_name} failed: {e}")
         end_time = time.time()
         total_time = end_time - start_time
         logger.error(f"{scraper_name} failed after {total_time:.2f} seconds: {e}")
@@ -56,7 +57,7 @@ def benchmark_scraper(
         }
 
 
-def compare_scrapers(session: Session, jail: Jail) -> None:
+def compare_scrapers(session: Session, jail: Jail, log_level: str = "INFO") -> None:
     """
     Compare the performance of standard vs optimized scrapers.
 
@@ -79,8 +80,8 @@ def compare_scrapers(session: Session, jail: Jail) -> None:
     optimized_result = benchmark_scraper(
         session,
         jail,
-        lambda s, j, l: scrape_washington_so_ar_optimized(
-            s, j, l, use_async=True, max_concurrent=10
+        lambda s, j: scrape_washington_so_ar_optimized(
+            s, j, log_level, use_async=True, max_concurrent=10
         ),
         "Optimized Scraper (Async)",
     )
@@ -90,8 +91,8 @@ def compare_scrapers(session: Session, jail: Jail) -> None:
     threaded_result = benchmark_scraper(
         session,
         jail,
-        lambda s, j, l: scrape_washington_so_ar_optimized(
-            s, j, l, use_async=False, max_concurrent=5
+        lambda s, j: scrape_washington_so_ar_optimized(
+            s, j, log_level, use_async=False, max_concurrent=5
         ),
         "Optimized Scraper (Threading)",
     )
