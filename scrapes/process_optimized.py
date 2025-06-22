@@ -123,17 +123,18 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
         # Insert inmates in batch
         if inmates_to_insert:
             logger.info(f"Inserting {len(inmates_to_insert)} inmates")
-            for inmate in inmates_to_insert:
-                try:
+            try:
+                for inmate in inmates_to_insert:
                     insert_ignore(session, Inmate, inmate.to_dict())
                     logger.debug(f"Inserted inmate: {inmate.name}")
-                except NotImplementedError:
-                    try:
-                        session.add(inmate)
-                    except IntegrityError as error:
-                        logger.debug(f"Failed to add inmate {inmate.name}: {error}")
-                        session.rollback()
-                        continue
+            except NotImplementedError:
+                logger.warning("insert_ignore not implemented, falling back to bulk_save_objects for inmates batch insert")
+                try:
+                    session.bulk_save_objects(inmates_to_insert, ignore_conflicts=True)
+                    logger.debug(f"Bulk inserted {len(inmates_to_insert)} inmates with bulk_save_objects")
+                except IntegrityError as error:
+                    logger.error(f"Bulk insert failed: {error}")
+                    session.rollback()
 
         # Commit all changes at once
         session.commit()
