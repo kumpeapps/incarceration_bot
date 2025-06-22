@@ -1,4 +1,6 @@
-FROM python:3.11.9-slim
+# Updated Dockerfile with newer Python version and build dependencies
+FROM python:3.12-slim
+
 ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies for building Python packages
