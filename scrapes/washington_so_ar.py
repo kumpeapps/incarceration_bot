@@ -10,6 +10,14 @@ from models.Inmate import Inmate
 from scrapes.process import process_scrape_data
 from helpers.image_helper import image_url_to_base64
 
+# Import optimized version if available
+try:
+    from scrapes.washington_so_ar_optimized import scrape_washington_so_ar_optimized
+    OPTIMIZED_AVAILABLE = True
+except ImportError:
+    OPTIMIZED_AVAILABLE = False
+    logger.warning("Optimized scraper not available, using standard version")
+
 URL = "https://www.washcosoar.gov/res/DetaineeAlphaRoster.aspx"
 
 
@@ -56,6 +64,29 @@ def scrape_inmate_data(details_path: str) -> dict:
 def scrape_washington_so_ar(session: Session, jail: Jail, log_level: str = "INFO"):
     """
     Get Washington County Inmate Data.
+    
+    This function automatically uses the optimized version if available,
+    otherwise falls back to the standard implementation.
+
+    Args:
+        session (Session): SQLAlchemy session for database operations.
+        jail (Jail): Jail object containing jail details.
+        log_level (str): Logging level for the scraping process. Default is "INFO".
+
+    Returns:
+        None
+    """
+    if OPTIMIZED_AVAILABLE:
+        logger.info("Using optimized Washington County scraper")
+        return scrape_washington_so_ar_optimized(session, jail, log_level)
+    else:
+        logger.info("Using standard Washington County scraper")
+        return scrape_washington_so_ar_standard(session, jail, log_level)
+
+
+def scrape_washington_so_ar_standard(session: Session, jail: Jail, log_level: str = "INFO"):
+    """
+    Standard implementation of Washington County Inmate Data scraper.
 
     Args:
         session (Session): SQLAlchemy session for database operations.

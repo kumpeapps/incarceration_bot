@@ -14,6 +14,7 @@ from scrapes.washington_so_ar import scrape_washington_so_ar
 from scrapes.crawford_so_ar import scrape_crawford_so_ar
 import database_connect as db
 from update_jails_db import update_jails_db
+from benchmark_scraper import compare_scrapers
 
 
 DEFAULT_SCHEDULE: str = "01:00,05:00,09:00,13:00,17:00,21:00"
@@ -82,7 +83,7 @@ def run():
                 failed_jails.append(jail.jail_name)
         elif jail.scrape_system == "washington_so_ar":
             try:
-                scrape_washington_so_ar(session, jail, log_level=LOG_LEVEL)
+                compare_scrapers(session, jail)
                 jails_completed += 1
                 success_jails.append(jail.jail_name)
             except Exception as e:
