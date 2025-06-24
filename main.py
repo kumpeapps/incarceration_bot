@@ -63,41 +63,46 @@ def run():
         def run_scrape(scrape_method, session, jail):
             try:
                 scrape_method(session, jail, log_level=LOG_LEVEL)
+                jails_completed += 1
+                success_jails.append(jail.jail_name)
             except Exception:
                 logger.exception(f"Failed to scrape {jail.jail_name}")
+                failed_jails.append(jail.jail_name)
 
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
             run_scrape(scrape_zuercherportal, session, jail)
         elif jail.scrape_system == "washington_so_ar":
             run_scrape(scrape_washington_so_ar_optimized, session, jail)
-        if jail.scrape_system == "zuercherportal":
-            try:
-                scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
-                jails_completed += 1
-                success_jails.append(jail.jail_name)
-            except Exception as e:
-                logger.error(f"Failed to scrape {jail.jail_name}")
-                logger.error(e)
-                failed_jails.append(jail.jail_name)
-        elif jail.scrape_system == "washington_so_ar":
-            try:
-                scrape_washington_so_ar_optimized(session, jail)
-                jails_completed += 1
-                success_jails.append(jail.jail_name)
-            except Exception as e:
-                logger.error(f"Failed to scrape {jail.jail_name}")
-                logger.error(e)
-                failed_jails.append(jail.jail_name)
         elif jail.scrape_system == "crawford_so_ar":
-            try:
-                scrape_crawford_so_ar(session, jail, log_level=LOG_LEVEL)
-                jails_completed += 1
-                success_jails.append(jail.jail_name)
-            except Exception as e:
-                logger.error(f"Failed to scrape {jail.jail_name}")
-                logger.error(e)
-                failed_jails.append(jail.jail_name)
+            run_scrape(scrape_crawford_so_ar, session, jail)
+        # if jail.scrape_system == "zuercherportal":
+        #     try:
+        #         scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
+        #         jails_completed += 1
+        #         success_jails.append(jail.jail_name)
+        #     except Exception as e:
+        #         logger.error(f"Failed to scrape {jail.jail_name}")
+        #         logger.error(e)
+        #         failed_jails.append(jail.jail_name)
+        # elif jail.scrape_system == "washington_so_ar":
+        #     try:
+        #         scrape_washington_so_ar_optimized(session, jail)
+        #         jails_completed += 1
+        #         success_jails.append(jail.jail_name)
+        #     except Exception as e:
+        #         logger.error(f"Failed to scrape {jail.jail_name}")
+        #         logger.error(e)
+        #         failed_jails.append(jail.jail_name)
+        # elif jail.scrape_system == "crawford_so_ar":
+        #     try:
+        #         scrape_crawford_so_ar(session, jail, log_level=LOG_LEVEL)
+        #         jails_completed += 1
+        #         success_jails.append(jail.jail_name)
+        #     except Exception as e:
+        #         logger.error(f"Failed to scrape {jail.jail_name}")
+        #         logger.error(e)
+        #         failed_jails.append(jail.jail_name)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     delete_old_mugshots(session)
     session.close()
