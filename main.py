@@ -10,11 +10,10 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from models.Jail import Jail, Inmate
 from scrapes.zuercher import scrape_zuercherportal
-from scrapes.washington_so_ar import scrape_washington_so_ar
 from scrapes.crawford_so_ar import scrape_crawford_so_ar
+from scrapes.washington_so_ar_optimized import scrape_washington_so_ar_optimized
 import database_connect as db
 from update_jails_db import update_jails_db
-from scrapes.washington_so_ar_optimized import scrape_washington_so_ar_optimized
 
 
 DEFAULT_SCHEDULE: str = "01:00,05:00,09:00,13:00,17:00,21:00"
@@ -71,7 +70,7 @@ def run():
         if jail.scrape_system == "zuercherportal":
             run_scrape(scrape_zuercherportal, session, jail)
         elif jail.scrape_system == "washington_so_ar":
-            run_scrape(scrape_washington_so_ar, session, jail)
+            run_scrape(scrape_washington_so_ar_optimized, session, jail)
         if jail.scrape_system == "zuercherportal":
             try:
                 scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
@@ -83,7 +82,7 @@ def run():
                 failed_jails.append(jail.jail_name)
         elif jail.scrape_system == "washington_so_ar":
             try:
-                scrape_washington_so_ar_optimized(session, jail, log_level=LOG_LEVEL)
+                scrape_washington_so_ar_optimized(session, jail)
                 jails_completed += 1
                 success_jails.append(jail.jail_name)
             except Exception as e:
