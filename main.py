@@ -10,11 +10,10 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from models.Jail import Jail, Inmate
 from scrapes.zuercher import scrape_zuercherportal
-from scrapes.washington_so_ar import scrape_washington_so_ar
 from scrapes.crawford_so_ar import scrape_crawford_so_ar
+from scrapes.washington_so_ar_optimized import scrape_washington_so_ar_optimized
 import database_connect as db
 from update_jails_db import update_jails_db
-from scrapes.washington_so_ar_optimized import scrape_washington_so_ar_optimized
 
 
 DEFAULT_SCHEDULE: str = "01:00,05:00,09:00,13:00,17:00,21:00"
@@ -64,41 +63,19 @@ def run():
         def run_scrape(scrape_method, session, jail):
             try:
                 scrape_method(session, jail, log_level=LOG_LEVEL)
+                jails_completed += 1
+                success_jails.append(jail.jail_name)
             except Exception:
                 logger.exception(f"Failed to scrape {jail.jail_name}")
+                failed_jails.append(jail.jail_name)
 
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
             run_scrape(scrape_zuercherportal, session, jail)
         elif jail.scrape_system == "washington_so_ar":
-            run_scrape(scrape_washington_so_ar, session, jail)
-        if jail.scrape_system == "zuercherportal":
-            try:
-                scrape_zuercherportal(session, jail, log_level=LOG_LEVEL)
-                jails_completed += 1
-                success_jails.append(jail.jail_name)
-            except Exception as e:
-                logger.error(f"Failed to scrape {jail.jail_name}")
-                logger.error(e)
-                failed_jails.append(jail.jail_name)
-        elif jail.scrape_system == "washington_so_ar":
-            try:
-                scrape_washington_so_ar_optimized(session, jail, log_level=LOG_LEVEL)
-                jails_completed += 1
-                success_jails.append(jail.jail_name)
-            except Exception as e:
-                logger.error(f"Failed to scrape {jail.jail_name}")
-                logger.error(e)
-                failed_jails.append(jail.jail_name)
+            run_scrape(scrape_washington_so_ar_optimized, session, jail)
         elif jail.scrape_system == "crawford_so_ar":
-            try:
-                scrape_crawford_so_ar(session, jail, log_level=LOG_LEVEL)
-                jails_completed += 1
-                success_jails.append(jail.jail_name)
-            except Exception as e:
-                logger.error(f"Failed to scrape {jail.jail_name}")
-                logger.error(e)
-                failed_jails.append(jail.jail_name)
+            run_scrape(scrape_crawford_so_ar, session, jail)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     delete_old_mugshots(session)
     session.close()
