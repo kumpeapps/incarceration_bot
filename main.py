@@ -63,7 +63,7 @@ def run():
         def run_scrape(scrape_method, session, jail):
             logger.debug(f"Run Scrape: Scraping {jail.jail_name} ({jail.scrape_system})")
             try:
-                scrape_method(session, jail, log_level=LOG_LEVEL)
+                scrape_method(session, jail)
                 jails_completed += 1
                 success_jails.append(jail.jail_name)
             except Exception:

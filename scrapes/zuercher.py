@@ -10,20 +10,19 @@ from models.Inmate import Inmate
 from scrapes.process import process_scrape_data
 
 
-def scrape_zuercherportal(session: Session, jail: Jail, log_level: str = "INFO"):
+def scrape_zuercherportal(session: Session, jail: Jail):
     """
     Get Inmate Records from a Zuercher Portal.
 
     Args:
         session (Session): SQLAlchemy session for database operations.
         jail (Jail): Jail object containing jail details.
-        log_level (str): Logging level for the scraping process. Default is "INFO".
 
     Returns:
         None
     """
     logger.info(f"Scraping {jail.jail_name}")
-    jail_api = zuercherportal.API(jail.jail_id, log_level=log_level, return_object=True)
+    jail_api = zuercherportal.API(jail.jail_id, return_object=True)
     inmate_data: ZuercherportalResponse = jail_api.inmate_search(records_per_page=10000)
     inmate_list: list[Inmate] = []
     for inmate in inmate_data.records:
@@ -34,7 +33,7 @@ def scrape_zuercherportal(session: Session, jail: Jail, log_level: str = "INFO")
         try:
             release_date = datetime.strptime(inmate.release_date, "%Y-%m-%d").date()
         except ValueError:
-            release_date = ""
+            release_date = None
         new_inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=inmate.name,
             arrest_date=arrest_date,
