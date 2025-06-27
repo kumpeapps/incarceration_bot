@@ -1,7 +1,6 @@
 """Web Scraper for Crawford County AR Jail"""
 
 from datetime import datetime
-import base64  # type: ignore
 import requests  # type: ignore
 import bs4  # type: ignore
 
