@@ -75,16 +75,13 @@ def scrape_inmate_data(details_path: str) -> dict:
     return details
 
 
-def scrape_crawford_so_ar(
-    session: Session, jail: Jail, log_level: str = "INFO"
-) -> None:
+def scrape_crawford_so_ar(session: Session, jail: Jail) -> None:
     """
     Get Crawford County Inmate Data.
 
     Args:
         session (Session): SQLAlchemy session for database operations.
         jail (Jail): Jail object containing jail details.
-        log_level (str): Logging level for the scraping process. Default is "INFO".
 
     Returns:
         None

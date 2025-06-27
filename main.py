@@ -53,6 +53,7 @@ def run():
     if enable_jails_containing:
         enable_jails(session)
     jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+    logger.debug(jails)
     jails_completed = 0
     jails_total = len(jails)
     success_jails = []
@@ -61,8 +62,10 @@ def run():
     for jail in jails:
 
         def run_scrape(scrape_method, session, jail):
+            nonlocal jails_completed
+            logger.debug(f"Run Scrape: Scraping {jail.jail_name} ({jail.scrape_system})")
             try:
-                scrape_method(session, jail, log_level=LOG_LEVEL)
+                scrape_method(session, jail)
                 jails_completed += 1
                 success_jails.append(jail.jail_name)
             except Exception:
@@ -71,10 +74,13 @@ def run():
 
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
+            logger.debug(f"If scraping system: Scraping {jail.jail_name} with Zuercher Portal")
             run_scrape(scrape_zuercherportal, session, jail)
         elif jail.scrape_system == "washington_so_ar":
+            logger.debug(f"If scraping system: Scraping {jail.jail_name} with Washington SO AR")
             run_scrape(scrape_washington_so_ar_optimized, session, jail)
         elif jail.scrape_system == "crawford_so_ar":
+            logger.debug(f"If scraping system: Scraping {jail.jail_name} with Crawford SO AR")
             run_scrape(scrape_crawford_so_ar, session, jail)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     delete_old_mugshots(session)

@@ -21,8 +21,11 @@ def update_jails_db(session: Session, filename: str = "jails.json"):
     """
     logger.info("Updating Jail Database")
     with open(filename, "r") as file:
+        logger.debug(f"Loading jails from {filename}")
         jails = json.load(file)
+        logger.debug(f"Loaded {len(jails)} jails from {filename}")
     for jail in jails:
+        logger.trace(f"Processing {jail['jail_name']}")
         db_jail = session.query(Jail).filter(Jail.jail_id == jail["jail_id"]).first()
         if db_jail:
             if str(db_jail.updated_date) != jail["updated_date"]:
