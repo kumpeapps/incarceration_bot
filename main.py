@@ -52,7 +52,8 @@ def run():
     session = db.new_session()
     if enable_jails_containing:
         enable_jails(session)
-    jails = session.query(Jail).filter(Jail.active is True).all()  # type: ignore
+    jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+    logger.debug(jails)
     jails_completed = 0
     jails_total = len(jails)
     success_jails = []
@@ -61,6 +62,7 @@ def run():
     for jail in jails:
 
         def run_scrape(scrape_method, session, jail):
+            nonlocal jails_completed
             logger.debug(f"Run Scrape: Scraping {jail.jail_name} ({jail.scrape_system})")
             try:
                 scrape_method(session, jail)
