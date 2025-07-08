@@ -1,6 +1,7 @@
 """Optimized process scraped data"""
 
 from datetime import datetime
+from typing import List, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
@@ -8,7 +9,6 @@ from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
 from helpers.insert_ignore import insert_ignore
-from typing import List, Dict
 
 
 def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail: Jail):
@@ -128,10 +128,14 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
                     insert_ignore(session, Inmate, inmate.to_dict())
                     logger.debug(f"Inserted inmate: {inmate.name}")
             except NotImplementedError:
-                logger.warning("insert_ignore not implemented, falling back to bulk_save_objects for inmates batch insert")
+                logger.warning(
+                    "insert_ignore not implemented, falling back to bulk_save_objects for inmates batch insert"
+                )
                 try:
-                    session.bulk_save_objects(inmates_to_insert, ignore_conflicts=True)
-                    logger.debug(f"Bulk inserted {len(inmates_to_insert)} inmates with bulk_save_objects")
+                    session.bulk_save_objects(inmates_to_insert)
+                    logger.debug(
+                        f"Bulk inserted {len(inmates_to_insert)} inmates with bulk_save_objects"
+                    )
                 except IntegrityError as error:
                     logger.error(f"Bulk insert failed: {error}")
                     session.rollback()
