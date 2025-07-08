@@ -83,7 +83,7 @@ def run():
             logger.debug(f"If scraping system: Scraping {jail.jail_name} with Crawford SO AR")
             run_scrape(scrape_crawford_so_ar, session, jail)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
-    delete_old_mugshots(session)
+    # delete_old_mugshots(session)
     session.close()
     if HEARTBEAT_WEBHOOK:
         logger.info("Sending Webhook Notification")
