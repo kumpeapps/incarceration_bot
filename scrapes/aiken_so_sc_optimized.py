@@ -1,5 +1,6 @@
 """Optimized Web Scraper for Aiken County SC Jail"""
 
+import os
 from datetime import datetime
 import re
 import time
@@ -22,7 +23,7 @@ BASE_URL = "https://www.aikencountysc.gov/DTNSearch"
 MUGSHOT_BASE_URL = "https://www.aikencountysc.gov"
 MAX_CONCURRENT_REQUESTS = 10  # Increased from 5 to speed up processing
 REQUEST_TIMEOUT = 15  # Shorter timeout to avoid hanging
-FETCH_MUGSHOTS = False  # Set to False to skip mugshot fetching for faster processing
+FETCH_MUGSHOTS = os.getenv("FETCH_MUGSHOTS", "False") == "True"
 
 def parse_date(date_str):
     """Parse date from string format MM-DD-YYYY"""
