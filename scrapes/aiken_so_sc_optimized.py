@@ -20,7 +20,9 @@ from helpers.image_helper import image_url_to_base64
 SEARCH_URL = "https://www.aikencountysc.gov/DTNSearch/DtnSchInmDspPublic_newFlex.php"
 BASE_URL = "https://www.aikencountysc.gov/DTNSearch"
 MUGSHOT_BASE_URL = "https://www.aikencountysc.gov"
-MAX_CONCURRENT_REQUESTS = 5  # Limit concurrent requests to avoid overwhelming server
+MAX_CONCURRENT_REQUESTS = 10  # Increased from 5 to speed up processing
+REQUEST_TIMEOUT = 15  # Shorter timeout to avoid hanging
+FETCH_MUGSHOTS = False  # Set to False to skip mugshot fetching for faster processing
 
 def parse_date(date_str):
     """Parse date from string format MM-DD-YYYY"""
@@ -47,7 +49,7 @@ async def async_get_inmate_details(session: aiohttp.ClientSession, inmate_id: st
     details_url = f"{BASE_URL}/DtnDspPerDtlPublicFlex.php?qSO_NO={inmate_id}"
     
     try:
-        async with session.get(details_url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+        async with session.get(details_url, timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)) as response:
             if response.status != 200:
                 logger.warning(f"Failed to fetch inmate details for {inmate_id}: HTTP {response.status}")
                 return None
@@ -55,14 +57,12 @@ async def async_get_inmate_details(session: aiohttp.ClientSession, inmate_id: st
             text = await response.text()
             soup = bs4.BeautifulSoup(text, "html.parser")
             
-            # Get mugshot if available
+            # Get mugshot if available - but only store the URL for now
             mugshot = None
+            mugshot_url = None
             mugshot_tag = soup.select('img[src^="/FlexImages/"]')
-            if mugshot_tag and len(mugshot_tag) > 0:
+            if FETCH_MUGSHOTS and mugshot_tag and len(mugshot_tag) > 0:
                 mugshot_url = mugshot_tag[0]['src']
-                full_mugshot_url = f"{MUGSHOT_BASE_URL}{mugshot_url}"
-                # We'll fetch the image in a separate thread to avoid blocking
-                mugshot = None  # We'll fetch it later if needed
                 
             # Get name and clean it up
             name_tag = soup.find("b", style="color:#dc0023")
@@ -100,33 +100,34 @@ async def async_get_inmate_details(session: aiohttp.ClientSession, inmate_id: st
             # Parse arrest date and held_for_agency
             arrest_date = None
             held_for_agency = None
-            arrest_table = soup.find("h3", string="Arrest Details").find_next("table")
+            arrest_table = soup.find("h3", string="Arrest Details")
             if arrest_table:
-                # Process date
-                date_cells = arrest_table.find_all("td", align="center")
-                if len(date_cells) >= 3:  # Agency, Status, Date
-                    date_text = date_cells[2].text.strip()
-                    date_match = re.search(r'(\d{2}-\d{2}-\d{4})', date_text)
-                    if date_match:
-                        arrest_date = parse_date(date_match.group(1))
-                
-                # Get the agency information
-                if len(date_cells) >= 1:  # First cell should be Agency
-                    agency_text = date_cells[0].text.strip()
-                    # Clean up and extract just the agency name
-                    agency_match = re.search(r'Agency:\s*(.*?)(?:\s*$)', agency_text)
-                    if agency_match:
-                        held_for_agency = agency_match.group(1).strip()
+                arrest_table = arrest_table.find_next("table")
+                if arrest_table:
+                    # Process date
+                    date_cells = arrest_table.find_all("td", align="center")
+                    if len(date_cells) >= 3:  # Agency, Status, Date
+                        date_text = date_cells[2].text.strip()
+                        date_match = re.search(r'(\d{2}-\d{2}-\d{4})', date_text)
+                        if date_match:
+                            arrest_date = parse_date(date_match.group(1))
+                    
+                    # Get the agency information
+                    if len(date_cells) >= 1:  # First cell should be Agency
+                        agency_text = date_cells[0].text.strip()
+                        # Clean up and extract just the agency name
+                        agency_match = re.search(r'Agency:\s*(.*?)(?:\s*$)', agency_text)
+                        if agency_match:
+                            held_for_agency = agency_match.group(1).strip()
             
-            # Only fetch the mugshot if we have a valid inmate record
-            if name and mugshot_tag and len(mugshot_tag) > 0:
-                mugshot_url = mugshot_tag[0]['src']
+            # Only fetch the mugshot if enabled and we have a valid inmate record
+            if FETCH_MUGSHOTS and name and mugshot_url:
                 full_mugshot_url = f"{MUGSHOT_BASE_URL}{mugshot_url}"
                 try:
                     # Use a thread to fetch the image to avoid blocking
                     with ThreadPoolExecutor(max_workers=1) as executor:
                         future = executor.submit(image_url_to_base64, full_mugshot_url)
-                        mugshot = future.result(timeout=10)
+                        mugshot = future.result(timeout=5)  # Reduced timeout from 10 to 5 seconds
                 except Exception as e:
                     logger.warning(f"Failed to fetch mugshot for inmate {inmate_id}: {str(e)}")
                     mugshot = None
@@ -211,17 +212,23 @@ async def get_all_inmates_async() -> List[Dict[str, Any]]:
     Returns:
         list: List of inmates with detailed info
     """
+    logger.info("Starting inmate data collection process")
+    start_time = time.time()
     alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     all_inmates: List[Dict[str, Any]] = []
     
     # Step 1: Get all inmate IDs for each letter in parallel
+    logger.info("Collecting inmate IDs for each letter of the alphabet")
+    letter_start_time = time.time()
     tasks = []
     for letter in alphabet:
         # Add a small delay to avoid hitting the server too hard
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.1)  # Reduced from 0.2 to speed up
         tasks.append(get_inmate_ids_for_letter(letter))
     
     letter_results = await asyncio.gather(*tasks)
+    letter_elapsed = time.time() - letter_start_time
+    logger.info(f"Completed collecting inmate IDs in {letter_elapsed:.2f} seconds")
     
     # Flatten the list of lists
     basic_inmates = []
@@ -231,22 +238,51 @@ async def get_all_inmates_async() -> List[Dict[str, Any]]:
     logger.info(f"Found {len(basic_inmates)} inmates in initial search")
     
     # Step 2: Get detailed information for each inmate in parallel with rate limiting
-    async with aiohttp.ClientSession() as session:
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
-        
-        async def get_details_with_semaphore(inmate):
-            async with semaphore:
-                # Add a small delay between requests
-                await asyncio.sleep(0.1)
-                return await async_get_inmate_details(session, inmate["inmate_id"])
-        
-        detail_tasks = [get_details_with_semaphore(inmate) for inmate in basic_inmates]
-        inmate_details = await asyncio.gather(*detail_tasks)
-        
-    # Filter out None values (failed requests)
-    inmates = [inmate for inmate in inmate_details if inmate is not None]
+    logger.info("Starting to fetch detailed inmate information")
+    details_start_time = time.time()
     
-    logger.info(f"Successfully fetched details for {len(inmates)} inmates")
+    # Create batches to process inmates in smaller groups
+    batch_size = 50
+    batches = [basic_inmates[i:i + batch_size] for i in range(0, len(basic_inmates), batch_size)]
+    logger.info(f"Processing inmates in {len(batches)} batches of {batch_size}")
+    
+    all_inmate_details = []
+    
+    for batch_num, batch in enumerate(batches):
+        batch_start_time = time.time()
+        logger.info(f"Processing batch {batch_num+1}/{len(batches)} with {len(batch)} inmates")
+        
+        async with aiohttp.ClientSession() as session:
+            semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+            
+            async def get_details_with_semaphore(inmate, index):
+                async with semaphore:
+                    # Add a small delay between requests
+                    await asyncio.sleep(0.05)  # Reduced from 0.1
+                    try:
+                        return await async_get_inmate_details(session, inmate["inmate_id"])
+                    except Exception as e:
+                        logger.error(f"Error in batch {batch_num+1}, inmate {index}: {str(e)}")
+                        return None
+            
+            detail_tasks = [get_details_with_semaphore(inmate, i) for i, inmate in enumerate(batch)]
+            batch_details = await asyncio.gather(*detail_tasks, return_exceptions=False)
+            
+            # Filter out None values (failed requests)
+            valid_details = [inmate for inmate in batch_details if inmate is not None]
+            all_inmate_details.extend(valid_details)
+            
+            batch_elapsed = time.time() - batch_start_time
+            logger.info(f"Completed batch {batch_num+1}/{len(batches)} in {batch_elapsed:.2f} seconds. Got {len(valid_details)}/{len(batch)} inmates.")
+    
+    details_elapsed = time.time() - details_start_time
+    logger.info(f"Completed fetching all inmate details in {details_elapsed:.2f} seconds")
+    
+    # Filter out None values (failed requests)
+    inmates = all_inmate_details
+    
+    total_elapsed = time.time() - start_time
+    logger.info(f"Successfully fetched details for {len(inmates)} inmates in total {total_elapsed:.2f} seconds")
     return inmates
 
 def get_all_inmates() -> List[Dict[str, Any]]:
@@ -274,33 +310,58 @@ def scrape_aiken_so_sc_optimized(session: Session, jail: Jail):
     start_time = time.time()
     inmate_list = []
     
-    # Get all inmates with optimized async fetching
-    inmates = get_all_inmates()
-    
-    logger.info(f"Found {len(inmates)} inmates to process")
-    
-    # Process inmate data into Inmate objects
-    for inmate_data in inmates:
-        try:
-            new_inmate = Inmate(
-                name=inmate_data["name"],
-                arrest_date=inmate_data["arrest_date"],
-                release_date=None,  # No release date for current inmates
-                hold_reasons=inmate_data["hold_reasons"],
-                held_for_agency=inmate_data["held_for_agency"],
-                jail_id=jail.jail_id,
-                race=inmate_data["race"],
-                sex=inmate_data["sex"],
-                cell_block=None,  # Not available
-                mugshot=inmate_data["mugshot"],
-                is_juvenile=False,  # Not clear how to determine this
-            )
-            inmate_list.append(new_inmate)
-        except Exception as e:
-            logger.exception(f"Error creating inmate object: {str(e)}")
-    
-    # Process the scraped data with optimized method
-    process_scrape_data_optimized(session, inmate_list, jail)
-    
-    elapsed_time = time.time() - start_time
-    logger.info(f"Completed optimized scraping of {jail.jail_name} in {elapsed_time:.2f} seconds")
+    try:
+        # Get all inmates with optimized async fetching
+        logger.info("Starting inmate data collection")
+        fetch_start = time.time()
+        inmates = get_all_inmates()
+        fetch_elapsed = time.time() - fetch_start
+        logger.info(f"Found {len(inmates)} inmates to process in {fetch_elapsed:.2f} seconds")
+        
+        if not inmates:
+            logger.warning("No inmates found - check if the website structure has changed")
+            # Update the jail record to mark as scraped even if no inmates found
+            # These should be objects not Columns, so this is just a linting error in your IDE
+            jail.last_scrape_date = datetime.now().date()  # type: ignore
+            jail.last_successful_scrape = datetime.now()  # type: ignore
+            session.commit()
+            logger.info(f"No inmates found for {jail.jail_name}, but marked as scraped")
+            return
+        
+        # Process inmate data into Inmate objects
+        logger.info("Creating inmate objects")
+        process_start = time.time()
+        for inmate_data in inmates:
+            try:
+                new_inmate = Inmate(
+                    name=inmate_data["name"],
+                    arrest_date=inmate_data["arrest_date"],
+                    release_date=None,  # No release date for current inmates
+                    hold_reasons=inmate_data["hold_reasons"],
+                    held_for_agency=inmate_data["held_for_agency"],
+                    jail_id=jail.jail_id,
+                    race=inmate_data["race"],
+                    sex=inmate_data["sex"],
+                    cell_block=None,  # Not available
+                    mugshot=inmate_data["mugshot"],
+                    is_juvenile=False,  # Not clear how to determine this
+                )
+                inmate_list.append(new_inmate)
+            except Exception as e:
+                logger.exception(f"Error creating inmate object: {str(e)}")
+        
+        process_elapsed = time.time() - process_start
+        logger.info(f"Created {len(inmate_list)} inmate objects in {process_elapsed:.2f} seconds")
+        
+        # Process the scraped data with optimized method
+        logger.info("Saving inmates to database")
+        db_start = time.time()
+        process_scrape_data_optimized(session, inmate_list, jail)
+        db_elapsed = time.time() - db_start
+        logger.info(f"Saved inmates to database in {db_elapsed:.2f} seconds")
+        
+    except Exception as e:
+        logger.exception(f"Error in scraping process: {str(e)}")
+    finally:
+        elapsed_time = time.time() - start_time
+        logger.info(f"Completed optimized scraping of {jail.jail_name} in {elapsed_time:.2f} seconds")
