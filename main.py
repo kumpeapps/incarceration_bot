@@ -83,7 +83,7 @@ def run():
         elif jail.scrape_system == "crawford_so_ar":
             logger.debug(f"If scraping system: Scraping {jail.jail_name} with Crawford SO AR")
             run_scrape(scrape_crawford_so_ar, session, jail)
-        elif jail.scrape_system == "aiken-so-sc":
+        elif jail.scrape_system == "aiken_so_sc":
             logger.debug(f"If scraping system: Scraping {jail.jail_name} with Aiken County SC")
             run_scrape(scrape_aiken_so_sc, session, jail)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
