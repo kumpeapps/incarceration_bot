@@ -7,10 +7,10 @@ This bot is a docker container for scraping jail websites and saving inmate data
 ##### Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it pretty quickly). Other jails need to figure out how to scrape the website first
 | State    | Jail              | Jail ID          | Added In Version | Mugshot                     |
 |----------|-------------------|------------------|------------------|-----------------------------|
-| Arkansas | Benton County     | benton-co-ar     | 1.0.0            | :white_check_mark:          |
-| Arkansas | Pulaski County    | pulaski-co-ar    | 1.0.0            | :white_check_mark:          |
-| Arkansas | Washington County | washington-co-ar | 2.0.0            | :white_check_mark: (2.1.3+) |
-| Arkansas | Crawford County   | crawford-co-ar   | 2.1.0            | :white_check_mark: (2.1.1+) |
+| Arkansas | Benton County     | benton-so-ar     | 1.0.0            | :white_check_mark:          |
+| Arkansas | Pulaski County    | pulaski-so-ar    | 1.0.0            | :white_check_mark:          |
+| Arkansas | Washington County | washington-so-ar | 2.0.0            | :white_check_mark: (2.1.3+) |
+| Arkansas | Crawford County   | crawford-so-ar   | 2.1.0            | :white_check_mark: (2.1.1+) |
 
 ### Example Docker Compose File
 ```
