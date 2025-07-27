@@ -76,9 +76,37 @@ async def async_get_inmate_details(session: aiohttp.ClientSession, inmate_id: st
                 # Extract the actual charge text
                 charge_match = re.search(r'Charge:\s*(.*?)(?:\s*Case #:|$)', charge_text)
                 if charge_match:
-                    charges.append(charge_match.group(1).strip())
+                    charge = charge_match.group(1).strip()
+                    if charge:  # Only add non-empty charges
+                        charges.append(charge)
             
-            hold_reasons = ", ".join(charges)
+            # Fallback: If no charges found using the above method, try to find them in a different way
+            if not charges:
+                charge_rows = soup.find_all("tr", {"valign": "top"})
+                for row in charge_rows:
+                    cells = row.find_all("td")
+                    if len(cells) >= 2:
+                        for cell in cells:
+                            if "Charge:" in cell.text:
+                                charge_text = cell.text.strip()
+                                charge_match = re.search(r'Charge:\s*(.*?)(?:\s*Case #:|$)', charge_text)
+                                if charge_match:
+                                    charge = charge_match.group(1).strip()
+                                    if charge:
+                                        charges.append(charge)
+            
+            # If still no charges found, look for offense information
+            if not charges:
+                offense_elements = soup.find_all("td", string=lambda s: s and "Offense:" in s)
+                for offense_element in offense_elements:
+                    offense_text = offense_element.text.strip()
+                    offense_match = re.search(r'Offense:\s*(.*?)(?:\s*\||$)', offense_text)
+                    if offense_match:
+                        offense = offense_match.group(1).strip()
+                        if offense:
+                            charges.append(offense)
+            
+            hold_reasons = ", ".join(charges) if charges else "Unknown"
             
             # Get bio info
             bio_table = soup.find("h3", string="Bio:").find_next("table")
@@ -112,13 +140,43 @@ async def async_get_inmate_details(session: aiohttp.ClientSession, inmate_id: st
                         if date_match:
                             arrest_date = parse_date(date_match.group(1))
                     
-                    # Get the agency information
+                    # Get the agency information - first try the center-aligned cells
                     if len(date_cells) >= 1:  # First cell should be Agency
                         agency_text = date_cells[0].text.strip()
                         # Clean up and extract just the agency name
                         agency_match = re.search(r'Agency:\s*(.*?)(?:\s*$)', agency_text)
                         if agency_match:
                             held_for_agency = agency_match.group(1).strip()
+            
+            # If we couldn't find the agency in the expected place, try alternative approaches
+            if not held_for_agency or held_for_agency == "":
+                # Method 2: Look for agency label directly
+                agency_elements = soup.find_all("td", string=lambda s: s and "Agency:" in s)
+                for agency_element in agency_elements:
+                    agency_text = agency_element.text.strip()
+                    agency_match = re.search(r'Agency:\s*(.*?)(?:\s*$)', agency_text)
+                    if agency_match:
+                        agency = agency_match.group(1).strip()
+                        if agency:
+                            held_for_agency = agency
+                            break
+                
+                # Method 3: Look in all table cells for Agency: pattern
+                if not held_for_agency or held_for_agency == "":
+                    all_cells = soup.find_all("td")
+                    for cell in all_cells:
+                        cell_text = cell.text.strip()
+                        if "Agency:" in cell_text:
+                            agency_match = re.search(r'Agency:\s*(.*?)(?:\s*$|[\r\n])', cell_text)
+                            if agency_match:
+                                agency = agency_match.group(1).strip()
+                                if agency:
+                                    held_for_agency = agency
+                                    break
+            
+            # Set default if still not found
+            if not held_for_agency or held_for_agency == "":
+                held_for_agency = "Aiken County Sheriff's Office"  # Default agency
             
             # Only fetch the mugshot if enabled and we have a valid inmate record
             if FETCH_MUGSHOTS and name and mugshot_url:
@@ -133,7 +191,7 @@ async def async_get_inmate_details(session: aiohttp.ClientSession, inmate_id: st
                     mugshot = None
             
             # Return complete inmate object
-            return {
+            inmate_data = {
                 "name": name,
                 "inmate_id": inmate_id,
                 "race": race,
@@ -143,6 +201,12 @@ async def async_get_inmate_details(session: aiohttp.ClientSession, inmate_id: st
                 "hold_reasons": hold_reasons,
                 "held_for_agency": held_for_agency
             }
+            
+            # Log the values we're especially concerned about
+            logger.debug(f"Inmate {inmate_id} - hold_reasons: '{hold_reasons}'")
+            logger.debug(f"Inmate {inmate_id} - held_for_agency: '{held_for_agency}'")
+            
+            return inmate_data
             
     except Exception as e:
         logger.exception(f"Error getting details for inmate {inmate_id}: {str(e)}")
@@ -333,6 +397,11 @@ def scrape_aiken_so_sc_optimized(session: Session, jail: Jail):
         process_start = time.time()
         for inmate_data in inmates:
             try:
+                # Add extra logging to verify data
+                logger.info(f"Processing inmate: {inmate_data['name']} ({inmate_data['inmate_id']})")
+                logger.info(f"  - held_for_agency: '{inmate_data['held_for_agency']}'")
+                logger.info(f"  - hold_reasons: '{inmate_data['hold_reasons']}'")
+                
                 new_inmate = Inmate(
                     name=inmate_data["name"],
                     arrest_date=inmate_data["arrest_date"],
