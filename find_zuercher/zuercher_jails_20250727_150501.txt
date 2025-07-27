@@ -1,0 +1,563 @@
+Zuercher Portal Jails Discovered - 2025-07-27 15:05:01
+Total jails found: 112
+
+Benton County AR Jail
+  URL: https://benton-so-ar.zuercherportal.com/#/
+  Jail ID: benton-so-ar
+  State: AR
+
+Pulaski County AR Jail
+  URL: https://pulaski-so-ar.zuercherportal.com/#/
+  Jail ID: pulaski-so-ar
+  State: AR
+
+Sutter County CA Jail
+  URL: https://sutter-so-ca.zuercherportal.com/#/
+  Jail ID: sutter-so-ca
+  State: CA
+
+Gilpin County CO Jail
+  URL: https://gilpin-so-co.zuercherportal.com/#/
+  Jail ID: gilpin-so-co
+  State: CO
+
+Catoosa County GA Jail
+  URL: https://catoosa-so-ga.zuercherportal.com/#/
+  Jail ID: catoosa-so-ga
+  State: GA
+
+Douglas County GA Jail
+  URL: https://douglas-so-ga.zuercherportal.com/#/
+  Jail ID: douglas-so-ga
+  State: GA
+
+Floyd County GA Jail
+  URL: https://floyd-so-ga.zuercherportal.com/#/
+  Jail ID: floyd-so-ga
+  State: GA
+
+Houston County GA Jail
+  URL: https://houston-so-ga.zuercherportal.com/#/
+  Jail ID: houston-so-ga
+  State: GA
+
+Lumpkin County GA Jail
+  URL: https://lumpkin-so-ga.zuercherportal.com/#/
+  Jail ID: lumpkin-so-ga
+  State: GA
+
+Toombs County GA Jail
+  URL: https://toombs-so-ga.zuercherportal.com/#/
+  Jail ID: toombs-so-ga
+  State: GA
+
+Clinton County IA Jail
+  URL: https://clinton-so-ia.zuercherportal.com/#/
+  Jail ID: clinton-so-ia
+  State: IA
+
+Marshall County IA Jail
+  URL: https://marshall-so-ia.zuercherportal.com/#/
+  Jail ID: marshall-so-ia
+  State: IA
+
+Pottawattamie County IA Jail
+  URL: https://pottawattamie-so-ia.zuercherportal.com/#/
+  Jail ID: pottawattamie-so-ia
+  State: IA
+
+Poweshiek County IA Jail
+  URL: https://poweshiek-so-ia.zuercherportal.com/#/
+  Jail ID: poweshiek-so-ia
+  State: IA
+
+Wapello County IA Jail
+  URL: https://wapello-so-ia.zuercherportal.com/#/
+  Jail ID: wapello-so-ia
+  State: IA
+
+Webster County IA Jail
+  URL: https://webster-so-ia.zuercherportal.com/#/
+  Jail ID: webster-so-ia
+  State: IA
+
+Winneshiek County IA Jail
+  URL: https://winneshiek-so-ia.zuercherportal.com/#/
+  Jail ID: winneshiek-so-ia
+  State: IA
+
+Clearwater County ID Jail
+  URL: https://clearwater-so-id.zuercherportal.com/#/
+  Jail ID: clearwater-so-id
+  State: ID
+
+Washington County ID Jail
+  URL: https://washington-so-id.zuercherportal.com/#/
+  Jail ID: washington-so-id
+  State: ID
+
+Iroquois County IL Jail
+  URL: https://iroquois-so-il.zuercherportal.com/#/
+  Jail ID: iroquois-so-il
+  State: IL
+
+Ogle County IL Jail
+  URL: https://ogle-so-il.zuercherportal.com/#/
+  Jail ID: ogle-so-il
+  State: IL
+
+Whiteside County IL Jail
+  URL: https://whiteside-so-il.zuercherportal.com/#/
+  Jail ID: whiteside-so-il
+  State: IL
+
+Marshall County IN Jail
+  URL: https://marshall-so-in.zuercherportal.com/#/
+  Jail ID: marshall-so-in
+  State: IN
+
+Wayne County IN Jail
+  URL: https://wayne-so-in.zuercherportal.com/#/
+  Jail ID: wayne-so-in
+  State: IN
+
+Atchison County KS Jail
+  URL: https://atchison-so-ks.zuercherportal.com/#/
+  Jail ID: atchison-so-ks
+  State: KS
+
+Leavenworth County KS Jail
+  URL: https://leavenworth-so-ks.zuercherportal.com/#/
+  Jail ID: leavenworth-so-ks
+  State: KS
+
+Linn County KS Jail
+  URL: https://linn-so-ks.zuercherportal.com/#/
+  Jail ID: linn-so-ks
+  State: KS
+
+Acadia Parish County LA Jail
+  URL: https://acadia-so-la.zuercherportal.com/#/
+  Jail ID: acadia-so-la
+  State: LA
+
+Assumption Parish County LA Jail
+  URL: https://assumption-so-la.zuercherportal.com/#/
+  Jail ID: assumption-so-la
+  State: LA
+
+Bienville Parish County LA Jail
+  URL: https://bienville-so-la.zuercherportal.com/#/
+  Jail ID: bienville-so-la
+  State: LA
+
+Jackson Parish County LA Jail
+  URL: https://jackson-so-la.zuercherportal.com/#/
+  Jail ID: jackson-so-la
+  State: LA
+
+Lafourche Parish County LA Jail
+  URL: https://lafourche-so-la.zuercherportal.com/#/
+  Jail ID: lafourche-so-la
+  State: LA
+
+Androscoggin County ME Jail
+  URL: https://androscoggin-so-me.zuercherportal.com/#/
+  Jail ID: androscoggin-so-me
+  State: ME
+
+Franklin County ME Jail
+  URL: https://franklin-so-me.zuercherportal.com/#/
+  Jail ID: franklin-so-me
+  State: ME
+
+Lincoln County ME Jail
+  URL: https://lincoln-so-me.zuercherportal.com/#/
+  Jail ID: lincoln-so-me
+  State: ME
+
+Monroe County MI Jail
+  URL: https://monroe-so-mi.zuercherportal.com/#/
+  Jail ID: monroe-so-mi
+  State: MI
+
+Pine County MN Jail
+  URL: https://pine-so-mn.zuercherportal.com/#/
+  Jail ID: pine-so-mn
+  State: MN
+
+Bates County MO Jail
+  URL: https://bates-so-mo.zuercherportal.com/#/
+  Jail ID: bates-so-mo
+  State: MO
+
+Jackson County MO Jail
+  URL: https://jackson-so-mo.zuercherportal.com/#/
+  Jail ID: jackson-so-mo
+  State: MO
+
+Broadwater County MT Jail
+  URL: https://broadwater-so-mt.zuercherportal.com/#/
+  Jail ID: broadwater-so-mt
+  State: MT
+
+Carbon County MT Jail
+  URL: https://carbon-so-mt.zuercherportal.com/#/
+  Jail ID: carbon-so-mt
+  State: MT
+
+Chouteau County MT Jail
+  URL: https://chouteau-so-mt.zuercherportal.com/#/
+  Jail ID: chouteau-so-mt
+  State: MT
+
+Gallatin County MT Jail
+  URL: https://gallatin-so-mt.zuercherportal.com/#/
+  Jail ID: gallatin-so-mt
+  State: MT
+
+Jefferson County MT Jail
+  URL: https://jefferson-so-mt.zuercherportal.com/#/
+  Jail ID: jefferson-so-mt
+  State: MT
+
+Madison County MT Jail
+  URL: https://madison-so-mt.zuercherportal.com/#/
+  Jail ID: madison-so-mt
+  State: MT
+
+Meagher County MT Jail
+  URL: https://meagher-so-mt.zuercherportal.com/#/
+  Jail ID: meagher-so-mt
+  State: MT
+
+Ravalli County MT Jail
+  URL: https://ravalli-so-mt.zuercherportal.com/#/
+  Jail ID: ravalli-so-mt
+  State: MT
+
+Roosevelt County MT Jail
+  URL: https://roosevelt-so-mt.zuercherportal.com/#/
+  Jail ID: roosevelt-so-mt
+  State: MT
+
+Rosebud County MT Jail
+  URL: https://rosebud-so-mt.zuercherportal.com/#/
+  Jail ID: rosebud-so-mt
+  State: MT
+
+Stillwater County MT Jail
+  URL: https://stillwater-so-mt.zuercherportal.com/#/
+  Jail ID: stillwater-so-mt
+  State: MT
+
+Valley County MT Jail
+  URL: https://valley-so-mt.zuercherportal.com/#/
+  Jail ID: valley-so-mt
+  State: MT
+
+Brunswick County NC Jail
+  URL: https://brunswick-so-nc.zuercherportal.com/#/
+  Jail ID: brunswick-so-nc
+  State: NC
+
+Davie County NC Jail
+  URL: https://davie-so-nc.zuercherportal.com/#/
+  Jail ID: davie-so-nc
+  State: NC
+
+Hoke County NC Jail
+  URL: https://hoke-so-nc.zuercherportal.com/#/
+  Jail ID: hoke-so-nc
+  State: NC
+
+Pender County NC Jail
+  URL: https://pender-so-nc.zuercherportal.com/#/
+  Jail ID: pender-so-nc
+  State: NC
+
+Rutherford County NC Jail
+  URL: https://rutherford-so-nc.zuercherportal.com/#/
+  Jail ID: rutherford-so-nc
+  State: NC
+
+Williams County ND Jail
+  URL: https://williams-so-nd.zuercherportal.com/#/
+  Jail ID: williams-so-nd
+  State: ND
+
+Johnson County NE Jail
+  URL: https://johnson-so-ne.zuercherportal.com/#/
+  Jail ID: johnson-so-ne
+  State: NE
+
+Perkins County NE Jail
+  URL: https://perkins-so-ne.zuercherportal.com/#/
+  Jail ID: perkins-so-ne
+  State: NE
+
+Rockingham County NH Jail
+  URL: https://rockingham-so-nh.zuercherportal.com/#/
+  Jail ID: rockingham-so-nh
+  State: NH
+
+Hidalgo County NM Jail
+  URL: https://hidalgo-so-nm.zuercherportal.com/#/
+  Jail ID: hidalgo-so-nm
+  State: NM
+
+Ashland County OH Jail
+  URL: https://ashland-so-oh.zuercherportal.com/#/
+  Jail ID: ashland-so-oh
+  State: OH
+
+Athens County OH Jail
+  URL: https://athens-so-oh.zuercherportal.com/#/
+  Jail ID: athens-so-oh
+  State: OH
+
+Fayette County OH Jail
+  URL: https://fayette-so-oh.zuercherportal.com/#/
+  Jail ID: fayette-so-oh
+  State: OH
+
+Marion County OH Jail
+  URL: https://marion-so-oh.zuercherportal.com/#/
+  Jail ID: marion-so-oh
+  State: OH
+
+Medina County OH Jail
+  URL: https://medina-so-oh.zuercherportal.com/#/
+  Jail ID: medina-so-oh
+  State: OH
+
+Paulding County OH Jail
+  URL: https://paulding-so-oh.zuercherportal.com/#/
+  Jail ID: paulding-so-oh
+  State: OH
+
+Pickaway County OH Jail
+  URL: https://pickaway-so-oh.zuercherportal.com/#/
+  Jail ID: pickaway-so-oh
+  State: OH
+
+Pike County OH Jail
+  URL: https://pike-so-oh.zuercherportal.com/#/
+  Jail ID: pike-so-oh
+  State: OH
+
+Preble County OH Jail
+  URL: https://preble-so-oh.zuercherportal.com/#/
+  Jail ID: preble-so-oh
+  State: OH
+
+Ross County OH Jail
+  URL: https://ross-so-oh.zuercherportal.com/#/
+  Jail ID: ross-so-oh
+  State: OH
+
+Scioto County OH Jail
+  URL: https://scioto-so-oh.zuercherportal.com/#/
+  Jail ID: scioto-so-oh
+  State: OH
+
+Shelby County OH Jail
+  URL: https://shelby-so-oh.zuercherportal.com/#/
+  Jail ID: shelby-so-oh
+  State: OH
+
+Cleveland County OK Jail
+  URL: https://cleveland-so-ok.zuercherportal.com/#/
+  Jail ID: cleveland-so-ok
+  State: OK
+
+Clatsop County OR Jail
+  URL: https://clatsop-so-or.zuercherportal.com/#/
+  Jail ID: clatsop-so-or
+  State: OR
+
+Anderson County SC Jail
+  URL: https://anderson-so-sc.zuercherportal.com/#/
+  Jail ID: anderson-so-sc
+  State: SC
+
+Cherokee County SC Jail
+  URL: https://cherokee-so-sc.zuercherportal.com/#/
+  Jail ID: cherokee-so-sc
+  State: SC
+
+Colleton County SC Jail
+  URL: https://colleton-so-sc.zuercherportal.com/#/
+  Jail ID: colleton-so-sc
+  State: SC
+
+Kershaw County SC Jail
+  URL: https://kershaw-so-sc.zuercherportal.com/#/
+  Jail ID: kershaw-so-sc
+  State: SC
+
+Oconee County SC Jail
+  URL: https://oconee-so-sc.zuercherportal.com/#/
+  Jail ID: oconee-so-sc
+  State: SC
+
+Pickens County SC Jail
+  URL: https://pickens-so-sc.zuercherportal.com/#/
+  Jail ID: pickens-so-sc
+  State: SC
+
+Union County SC Jail
+  URL: https://union-so-sc.zuercherportal.com/#/
+  Jail ID: union-so-sc
+  State: SC
+
+Williamsburg County SC Jail
+  URL: https://williamsburg-so-sc.zuercherportal.com/#/
+  Jail ID: williamsburg-so-sc
+  State: SC
+
+Bennett County SD Jail
+  URL: https://bennett-so-sd.zuercherportal.com/#/
+  Jail ID: bennett-so-sd
+  State: SD
+
+Clay County SD Jail
+  URL: https://clay-so-sd.zuercherportal.com/#/
+  Jail ID: clay-so-sd
+  State: SD
+
+Custer County SD Jail
+  URL: https://custer-so-sd.zuercherportal.com/#/
+  Jail ID: custer-so-sd
+  State: SD
+
+Davison County SD Jail
+  URL: https://davison-so-sd.zuercherportal.com/#/
+  Jail ID: davison-so-sd
+  State: SD
+
+Lake County SD Jail
+  URL: https://lake-so-sd.zuercherportal.com/#/
+  Jail ID: lake-so-sd
+  State: SD
+
+Lawrence County SD Jail
+  URL: https://lawrence-so-sd.zuercherportal.com/#/
+  Jail ID: lawrence-so-sd
+  State: SD
+
+Lincoln County SD Jail
+  URL: https://lincoln-so-sd.zuercherportal.com/#/
+  Jail ID: lincoln-so-sd
+  State: SD
+
+Lyman County SD Jail
+  URL: https://lyman-so-sd.zuercherportal.com/#/
+  Jail ID: lyman-so-sd
+  State: SD
+
+Marshall County SD Jail
+  URL: https://marshall-so-sd.zuercherportal.com/#/
+  Jail ID: marshall-so-sd
+  State: SD
+
+Meade County SD Jail
+  URL: https://meade-so-sd.zuercherportal.com/#/
+  Jail ID: meade-so-sd
+  State: SD
+
+Pennington County SD Jail
+  URL: https://pennington-so-sd.zuercherportal.com/#/
+  Jail ID: pennington-so-sd
+  State: SD
+
+Roberts County SD Jail
+  URL: https://roberts-so-sd.zuercherportal.com/#/
+  Jail ID: roberts-so-sd
+  State: SD
+
+Sully County SD Jail
+  URL: https://sully-so-sd.zuercherportal.com/#/
+  Jail ID: sully-so-sd
+  State: SD
+
+Union County SD Jail
+  URL: https://union-so-sd.zuercherportal.com/#/
+  Jail ID: union-so-sd
+  State: SD
+
+Yankton County SD Jail
+  URL: https://yankton-so-sd.zuercherportal.com/#/
+  Jail ID: yankton-so-sd
+  State: SD
+
+Sullivan County TN Jail
+  URL: https://sullivan-so-tn.zuercherportal.com/#/
+  Jail ID: sullivan-so-tn
+  State: TN
+
+Washington County TN Jail
+  URL: https://washington-so-tn.zuercherportal.com/#/
+  Jail ID: washington-so-tn
+  State: TN
+
+Brooks County TX Jail
+  URL: https://brooks-so-tx.zuercherportal.com/#/
+  Jail ID: brooks-so-tx
+  State: TX
+
+Presidio County TX Jail
+  URL: https://presidio-so-tx.zuercherportal.com/#/
+  Jail ID: presidio-so-tx
+  State: TX
+
+Upshur County TX Jail
+  URL: https://upshur-so-tx.zuercherportal.com/#/
+  Jail ID: upshur-so-tx
+  State: TX
+
+Caroline County VA Jail
+  URL: https://caroline-so-va.zuercherportal.com/#/
+  Jail ID: caroline-so-va
+  State: VA
+
+Northumberland County VA Jail
+  URL: https://northumberland-so-va.zuercherportal.com/#/
+  Jail ID: northumberland-so-va
+  State: VA
+
+Dunn County WI Jail
+  URL: https://dunn-so-wi.zuercherportal.com/#/
+  Jail ID: dunn-so-wi
+  State: WI
+
+Grant County WI Jail
+  URL: https://grant-so-wi.zuercherportal.com/#/
+  Jail ID: grant-so-wi
+  State: WI
+
+Lincoln County WI Jail
+  URL: https://lincoln-so-wi.zuercherportal.com/#/
+  Jail ID: lincoln-so-wi
+  State: WI
+
+Menominee County WI Jail
+  URL: https://menominee-so-wi.zuercherportal.com/#/
+  Jail ID: menominee-so-wi
+  State: WI
+
+Monroe County WI Jail
+  URL: https://monroe-so-wi.zuercherportal.com/#/
+  Jail ID: monroe-so-wi
+  State: WI
+
+Washburn County WI Jail
+  URL: https://washburn-so-wi.zuercherportal.com/#/
+  Jail ID: washburn-so-wi
+  State: WI
+
+Teton County WY Jail
+  URL: https://teton-so-wy.zuercherportal.com/#/
+  Jail ID: teton-so-wy
+  State: WY
+
