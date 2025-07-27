@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import re
+import time
 import requests  # type: ignore
 import bs4  # type: ignore
 from sqlalchemy.orm import Session
@@ -120,55 +121,65 @@ def get_all_inmates():
         list: List of inmates with basic info
     """
     inmates = []
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     
-    # We'll search with just 'A' as the last name to get everyone
-    # The system accepts a blank last name, but let's use 'A' to be safe
-    search_params = {
-        "LNAME": "A",
-        "FNAME": "",
-        "InSex": "All",
-        "InRace": "All",
-    }
+    # Loop through each letter of the alphabet to get all inmates
+    for letter in alphabet:
+        logger.info(f"Searching inmates with last names starting with '{letter}'")
+        
+        search_params = {
+            "LNAME": letter,
+            "FNAME": "",
+            "InSex": "All",
+            "InRace": "All",
+        }
+        
+        try:
+            # Add a small delay to avoid overwhelming the server
+            time.sleep(1)
+            
+            response = requests.post(SEARCH_URL, data=search_params, timeout=30)
+            response.raise_for_status()
+            
+            soup = bs4.BeautifulSoup(response.text, "html.parser")
+            
+            # Find all inmate rows in the results table
+            inmate_links = soup.find_all("a", href=lambda href: href and "qSO_NO=" in href)
+            logger.debug(f"Found {len(inmate_links)} inmates with last names starting with '{letter}'")
+            
+            # Process each inmate
+            for link in inmate_links:
+                try:
+                    # Extract inmate ID from the link
+                    inmate_id = re.search(r'qSO_NO=(\d+)', link['href']).group(1)
+                    
+                    # Get the row that contains this link
+                    row = link.find_parent("tr")
+                    cells = row.find_all("td")
+                    
+                    if len(cells) >= 6:  # Make sure we have all the columns
+                        last_name = cells[0].text.strip()
+                        first_name = cells[1].text.strip()
+                        arrest_date = parse_date(cells[2].text.strip())
+                        sex = cells[4].text.strip()
+                        race = cells[5].text.strip()
+                        
+                        # Get detailed info
+                        # Add a small delay before fetching details
+                        time.sleep(0.5)
+                        inmate_details = get_inmate_details(inmate_id)
+                        
+                        if inmate_details:
+                            inmates.append(inmate_details)
+                        
+                except Exception as e:
+                    logger.exception(f"Error processing inmate row: {str(e)}")
+                    continue
+                
+        except Exception as e:
+            logger.exception(f"Error fetching inmates for letter {letter}: {str(e)}")
     
-    try:
-        response = requests.post(SEARCH_URL, data=search_params, timeout=30)
-        response.raise_for_status()
-        
-        soup = bs4.BeautifulSoup(response.text, "html.parser")
-        
-        # Find all inmate rows in the results table
-        inmate_links = soup.find_all("a", href=lambda href: href and "qSO_NO=" in href)
-        
-        # Process each inmate
-        for link in inmate_links:
-            try:
-                # Extract inmate ID from the link
-                inmate_id = re.search(r'qSO_NO=(\d+)', link['href']).group(1)
-                
-                # Get the row that contains this link
-                row = link.find_parent("tr")
-                cells = row.find_all("td")
-                
-                if len(cells) >= 6:  # Make sure we have all the columns
-                    last_name = cells[0].text.strip()
-                    first_name = cells[1].text.strip()
-                    arrest_date = parse_date(cells[2].text.strip())
-                    sex = cells[4].text.strip()
-                    race = cells[5].text.strip()
-                    
-                    # Get detailed info
-                    inmate_details = get_inmate_details(inmate_id)
-                    
-                    if inmate_details:
-                        inmates.append(inmate_details)
-                    
-            except Exception as e:
-                logger.exception(f"Error processing inmate row: {str(e)}")
-                continue
-                
-    except Exception as e:
-        logger.exception(f"Error fetching inmates: {str(e)}")
-    
+    logger.info(f"Total inmates found across all letters: {len(inmates)}")
     return inmates
 
 def scrape_aiken_so_sc(session: Session, jail: Jail):
