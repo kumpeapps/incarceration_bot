@@ -12,6 +12,7 @@ from models.Jail import Jail, Inmate
 from scrapes.zuercher import scrape_zuercherportal
 from scrapes.crawford_so_ar import scrape_crawford_so_ar
 from scrapes.washington_so_ar_optimized import scrape_washington_so_ar_optimized
+from scrapes.aiken_so_sc import scrape_aiken_so_sc
 import database_connect as db
 from update_jails_db import update_jails_db
 
@@ -82,6 +83,9 @@ def run():
         elif jail.scrape_system == "crawford_so_ar":
             logger.debug(f"If scraping system: Scraping {jail.jail_name} with Crawford SO AR")
             run_scrape(scrape_crawford_so_ar, session, jail)
+        elif jail.scrape_system == "aiken_so_sc":
+            logger.debug(f"If scraping system: Scraping {jail.jail_name} with Aiken County SC")
+            run_scrape(scrape_aiken_so_sc, session, jail)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     # delete_old_mugshots(session)
     session.close()
