@@ -1,0 +1,1570 @@
+[
+  {
+    "county": "Benton",
+    "state": "AR",
+    "state_abbrev": "AR",
+    "url": "https://benton-so-ar.zuercherportal.com/#/",
+    "jail_name": "Benton County AR Jail",
+    "jail_id": "benton-so-ar",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pulaski",
+    "state": "AR",
+    "state_abbrev": "AR",
+    "url": "https://pulaski-so-ar.zuercherportal.com/#/",
+    "jail_name": "Pulaski County AR Jail",
+    "jail_id": "pulaski-so-ar",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Sutter",
+    "state": "CA",
+    "state_abbrev": "CA",
+    "url": "https://sutter-so-ca.zuercherportal.com/#/",
+    "jail_name": "Sutter County CA Jail",
+    "jail_id": "sutter-so-ca",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Gilpin",
+    "state": "CO",
+    "state_abbrev": "CO",
+    "url": "https://gilpin-so-co.zuercherportal.com/#/",
+    "jail_name": "Gilpin County CO Jail",
+    "jail_id": "gilpin-so-co",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Catoosa",
+    "state": "GA",
+    "state_abbrev": "GA",
+    "url": "https://catoosa-so-ga.zuercherportal.com/#/",
+    "jail_name": "Catoosa County GA Jail",
+    "jail_id": "catoosa-so-ga",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Douglas",
+    "state": "GA",
+    "state_abbrev": "GA",
+    "url": "https://douglas-so-ga.zuercherportal.com/#/",
+    "jail_name": "Douglas County GA Jail",
+    "jail_id": "douglas-so-ga",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Floyd",
+    "state": "GA",
+    "state_abbrev": "GA",
+    "url": "https://floyd-so-ga.zuercherportal.com/#/",
+    "jail_name": "Floyd County GA Jail",
+    "jail_id": "floyd-so-ga",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Houston",
+    "state": "GA",
+    "state_abbrev": "GA",
+    "url": "https://houston-so-ga.zuercherportal.com/#/",
+    "jail_name": "Houston County GA Jail",
+    "jail_id": "houston-so-ga",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lumpkin",
+    "state": "GA",
+    "state_abbrev": "GA",
+    "url": "https://lumpkin-so-ga.zuercherportal.com/#/",
+    "jail_name": "Lumpkin County GA Jail",
+    "jail_id": "lumpkin-so-ga",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Toombs",
+    "state": "GA",
+    "state_abbrev": "GA",
+    "url": "https://toombs-so-ga.zuercherportal.com/#/",
+    "jail_name": "Toombs County GA Jail",
+    "jail_id": "toombs-so-ga",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Clearwater",
+    "state": "ID",
+    "state_abbrev": "ID",
+    "url": "https://clearwater-so-id.zuercherportal.com/#/",
+    "jail_name": "Clearwater County ID Jail",
+    "jail_id": "clearwater-so-id",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Washington",
+    "state": "ID",
+    "state_abbrev": "ID",
+    "url": "https://washington-so-id.zuercherportal.com/#/",
+    "jail_name": "Washington County ID Jail",
+    "jail_id": "washington-so-id",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Iroquois",
+    "state": "IL",
+    "state_abbrev": "IL",
+    "url": "https://iroquois-so-il.zuercherportal.com/#/",
+    "jail_name": "Iroquois County IL Jail",
+    "jail_id": "iroquois-so-il",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Ogle",
+    "state": "IL",
+    "state_abbrev": "IL",
+    "url": "https://ogle-so-il.zuercherportal.com/#/",
+    "jail_name": "Ogle County IL Jail",
+    "jail_id": "ogle-so-il",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Whiteside",
+    "state": "IL",
+    "state_abbrev": "IL",
+    "url": "https://whiteside-so-il.zuercherportal.com/#/",
+    "jail_name": "Whiteside County IL Jail",
+    "jail_id": "whiteside-so-il",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Marshall",
+    "state": "IN",
+    "state_abbrev": "IN",
+    "url": "https://marshall-so-in.zuercherportal.com/#/",
+    "jail_name": "Marshall County IN Jail",
+    "jail_id": "marshall-so-in",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "zuercher"
+    ]
+  },
+  {
+    "county": "Wayne",
+    "state": "IN",
+    "state_abbrev": "IN",
+    "url": "https://wayne-so-in.zuercherportal.com/#/",
+    "jail_name": "Wayne County IN Jail",
+    "jail_id": "wayne-so-in",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Clinton",
+    "state": "IA",
+    "state_abbrev": "IA",
+    "url": "https://clinton-so-ia.zuercherportal.com/#/",
+    "jail_name": "Clinton County IA Jail",
+    "jail_id": "clinton-so-ia",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Marshall",
+    "state": "IA",
+    "state_abbrev": "IA",
+    "url": "https://marshall-so-ia.zuercherportal.com/#/",
+    "jail_name": "Marshall County IA Jail",
+    "jail_id": "marshall-so-ia",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pottawattamie",
+    "state": "IA",
+    "state_abbrev": "IA",
+    "url": "https://pottawattamie-so-ia.zuercherportal.com/#/",
+    "jail_name": "Pottawattamie County IA Jail",
+    "jail_id": "pottawattamie-so-ia",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Poweshiek",
+    "state": "IA",
+    "state_abbrev": "IA",
+    "url": "https://poweshiek-so-ia.zuercherportal.com/#/",
+    "jail_name": "Poweshiek County IA Jail",
+    "jail_id": "poweshiek-so-ia",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Wapello",
+    "state": "IA",
+    "state_abbrev": "IA",
+    "url": "https://wapello-so-ia.zuercherportal.com/#/",
+    "jail_name": "Wapello County IA Jail",
+    "jail_id": "wapello-so-ia",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Winneshiek",
+    "state": "IA",
+    "state_abbrev": "IA",
+    "url": "https://winneshiek-so-ia.zuercherportal.com/#/",
+    "jail_name": "Winneshiek County IA Jail",
+    "jail_id": "winneshiek-so-ia",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Atchison",
+    "state": "KS",
+    "state_abbrev": "KS",
+    "url": "https://atchison-so-ks.zuercherportal.com/#/",
+    "jail_name": "Atchison County KS Jail",
+    "jail_id": "atchison-so-ks",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Leavenworth",
+    "state": "KS",
+    "state_abbrev": "KS",
+    "url": "https://leavenworth-so-ks.zuercherportal.com/#/",
+    "jail_name": "Leavenworth County KS Jail",
+    "jail_id": "leavenworth-so-ks",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Linn",
+    "state": "KS",
+    "state_abbrev": "KS",
+    "url": "https://linn-so-ks.zuercherportal.com/#/",
+    "jail_name": "Linn County KS Jail",
+    "jail_id": "linn-so-ks",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Webster",
+    "state": "IA",
+    "state_abbrev": "IA",
+    "url": "https://webster-so-ia.zuercherportal.com/#/",
+    "jail_name": "Webster County IA Jail",
+    "jail_id": "webster-so-ia",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Acadia Parish",
+    "state": "LA",
+    "state_abbrev": "LA",
+    "url": "https://acadia-so-la.zuercherportal.com/#/",
+    "jail_name": "Acadia Parish County LA Jail",
+    "jail_id": "acadia-so-la",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Assumption Parish",
+    "state": "LA",
+    "state_abbrev": "LA",
+    "url": "https://assumption-so-la.zuercherportal.com/#/",
+    "jail_name": "Assumption Parish County LA Jail",
+    "jail_id": "assumption-so-la",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Bienville Parish",
+    "state": "LA",
+    "state_abbrev": "LA",
+    "url": "https://bienville-so-la.zuercherportal.com/#/",
+    "jail_name": "Bienville Parish County LA Jail",
+    "jail_id": "bienville-so-la",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Jackson Parish",
+    "state": "LA",
+    "state_abbrev": "LA",
+    "url": "https://jackson-so-la.zuercherportal.com/#/",
+    "jail_name": "Jackson Parish County LA Jail",
+    "jail_id": "jackson-so-la",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lafourche Parish",
+    "state": "LA",
+    "state_abbrev": "LA",
+    "url": "https://lafourche-so-la.zuercherportal.com/#/",
+    "jail_name": "Lafourche Parish County LA Jail",
+    "jail_id": "lafourche-so-la",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Androscoggin",
+    "state": "ME",
+    "state_abbrev": "ME",
+    "url": "https://androscoggin-so-me.zuercherportal.com/#/",
+    "jail_name": "Androscoggin County ME Jail",
+    "jail_id": "androscoggin-so-me",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Franklin",
+    "state": "ME",
+    "state_abbrev": "ME",
+    "url": "https://franklin-so-me.zuercherportal.com/#/",
+    "jail_name": "Franklin County ME Jail",
+    "jail_id": "franklin-so-me",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lincoln",
+    "state": "ME",
+    "state_abbrev": "ME",
+    "url": "https://lincoln-so-me.zuercherportal.com/#/",
+    "jail_name": "Lincoln County ME Jail",
+    "jail_id": "lincoln-so-me",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Monroe",
+    "state": "MI",
+    "state_abbrev": "MI",
+    "url": "https://monroe-so-mi.zuercherportal.com/#/",
+    "jail_name": "Monroe County MI Jail",
+    "jail_id": "monroe-so-mi",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pine",
+    "state": "MN",
+    "state_abbrev": "MN",
+    "url": "https://pine-so-mn.zuercherportal.com/#/",
+    "jail_name": "Pine County MN Jail",
+    "jail_id": "pine-so-mn",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Bates",
+    "state": "MO",
+    "state_abbrev": "MO",
+    "url": "https://bates-so-mo.zuercherportal.com/#/",
+    "jail_name": "Bates County MO Jail",
+    "jail_id": "bates-so-mo",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Jackson",
+    "state": "MO",
+    "state_abbrev": "MO",
+    "url": "https://jackson-so-mo.zuercherportal.com/#/",
+    "jail_name": "Jackson County MO Jail",
+    "jail_id": "jackson-so-mo",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Broadwater",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://broadwater-so-mt.zuercherportal.com/#/",
+    "jail_name": "Broadwater County MT Jail",
+    "jail_id": "broadwater-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Chouteau",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://chouteau-so-mt.zuercherportal.com/#/",
+    "jail_name": "Chouteau County MT Jail",
+    "jail_id": "chouteau-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Carbon",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://carbon-so-mt.zuercherportal.com/#/",
+    "jail_name": "Carbon County MT Jail",
+    "jail_id": "carbon-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Jefferson",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://jefferson-so-mt.zuercherportal.com/#/",
+    "jail_name": "Jefferson County MT Jail",
+    "jail_id": "jefferson-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Gallatin",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://gallatin-so-mt.zuercherportal.com/#/",
+    "jail_name": "Gallatin County MT Jail",
+    "jail_id": "gallatin-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Madison",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://madison-so-mt.zuercherportal.com/#/",
+    "jail_name": "Madison County MT Jail",
+    "jail_id": "madison-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Meagher",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://meagher-so-mt.zuercherportal.com/#/",
+    "jail_name": "Meagher County MT Jail",
+    "jail_id": "meagher-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Rosebud",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://rosebud-so-mt.zuercherportal.com/#/",
+    "jail_name": "Rosebud County MT Jail",
+    "jail_id": "rosebud-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Roosevelt",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://roosevelt-so-mt.zuercherportal.com/#/",
+    "jail_name": "Roosevelt County MT Jail",
+    "jail_id": "roosevelt-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Ravalli",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://ravalli-so-mt.zuercherportal.com/#/",
+    "jail_name": "Ravalli County MT Jail",
+    "jail_id": "ravalli-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Valley",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://valley-so-mt.zuercherportal.com/#/",
+    "jail_name": "Valley County MT Jail",
+    "jail_id": "valley-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Stillwater",
+    "state": "MT",
+    "state_abbrev": "MT",
+    "url": "https://stillwater-so-mt.zuercherportal.com/#/",
+    "jail_name": "Stillwater County MT Jail",
+    "jail_id": "stillwater-so-mt",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Johnson",
+    "state": "NE",
+    "state_abbrev": "NE",
+    "url": "https://johnson-so-ne.zuercherportal.com/#/",
+    "jail_name": "Johnson County NE Jail",
+    "jail_id": "johnson-so-ne",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Perkins",
+    "state": "NE",
+    "state_abbrev": "NE",
+    "url": "https://perkins-so-ne.zuercherportal.com/#/",
+    "jail_name": "Perkins County NE Jail",
+    "jail_id": "perkins-so-ne",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Rockingham",
+    "state": "NH",
+    "state_abbrev": "NH",
+    "url": "https://rockingham-so-nh.zuercherportal.com/#/",
+    "jail_name": "Rockingham County NH Jail",
+    "jail_id": "rockingham-so-nh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Hidalgo",
+    "state": "NM",
+    "state_abbrev": "NM",
+    "url": "https://hidalgo-so-nm.zuercherportal.com/#/",
+    "jail_name": "Hidalgo County NM Jail",
+    "jail_id": "hidalgo-so-nm",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Brunswick",
+    "state": "NC",
+    "state_abbrev": "NC",
+    "url": "https://brunswick-so-nc.zuercherportal.com/#/",
+    "jail_name": "Brunswick County NC Jail",
+    "jail_id": "brunswick-so-nc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Davie",
+    "state": "NC",
+    "state_abbrev": "NC",
+    "url": "https://davie-so-nc.zuercherportal.com/#/",
+    "jail_name": "Davie County NC Jail",
+    "jail_id": "davie-so-nc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Hoke",
+    "state": "NC",
+    "state_abbrev": "NC",
+    "url": "https://hoke-so-nc.zuercherportal.com/#/",
+    "jail_name": "Hoke County NC Jail",
+    "jail_id": "hoke-so-nc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pender",
+    "state": "NC",
+    "state_abbrev": "NC",
+    "url": "https://pender-so-nc.zuercherportal.com/#/",
+    "jail_name": "Pender County NC Jail",
+    "jail_id": "pender-so-nc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Rutherford",
+    "state": "NC",
+    "state_abbrev": "NC",
+    "url": "https://rutherford-so-nc.zuercherportal.com/#/",
+    "jail_name": "Rutherford County NC Jail",
+    "jail_id": "rutherford-so-nc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Ashland",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://ashland-so-oh.zuercherportal.com/#/",
+    "jail_name": "Ashland County OH Jail",
+    "jail_id": "ashland-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Williams",
+    "state": "ND",
+    "state_abbrev": "ND",
+    "url": "https://williams-so-nd.zuercherportal.com/#/",
+    "jail_name": "Williams County ND Jail",
+    "jail_id": "williams-so-nd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Athens",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://athens-so-oh.zuercherportal.com/#/",
+    "jail_name": "Athens County OH Jail",
+    "jail_id": "athens-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Fayette",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://fayette-so-oh.zuercherportal.com/#/",
+    "jail_name": "Fayette County OH Jail",
+    "jail_id": "fayette-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Marion",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://marion-so-oh.zuercherportal.com/#/",
+    "jail_name": "Marion County OH Jail",
+    "jail_id": "marion-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Medina",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://medina-so-oh.zuercherportal.com/#/",
+    "jail_name": "Medina County OH Jail",
+    "jail_id": "medina-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Paulding",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://paulding-so-oh.zuercherportal.com/#/",
+    "jail_name": "Paulding County OH Jail",
+    "jail_id": "paulding-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pickaway",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://pickaway-so-oh.zuercherportal.com/#/",
+    "jail_name": "Pickaway County OH Jail",
+    "jail_id": "pickaway-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pike",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://pike-so-oh.zuercherportal.com/#/",
+    "jail_name": "Pike County OH Jail",
+    "jail_id": "pike-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Preble",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://preble-so-oh.zuercherportal.com/#/",
+    "jail_name": "Preble County OH Jail",
+    "jail_id": "preble-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Ross",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://ross-so-oh.zuercherportal.com/#/",
+    "jail_name": "Ross County OH Jail",
+    "jail_id": "ross-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Scioto",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://scioto-so-oh.zuercherportal.com/#/",
+    "jail_name": "Scioto County OH Jail",
+    "jail_id": "scioto-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Shelby",
+    "state": "OH",
+    "state_abbrev": "OH",
+    "url": "https://shelby-so-oh.zuercherportal.com/#/",
+    "jail_name": "Shelby County OH Jail",
+    "jail_id": "shelby-so-oh",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Cleveland",
+    "state": "OK",
+    "state_abbrev": "OK",
+    "url": "https://cleveland-so-ok.zuercherportal.com/#/",
+    "jail_name": "Cleveland County OK Jail",
+    "jail_id": "cleveland-so-ok",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Clatsop",
+    "state": "OR",
+    "state_abbrev": "OR",
+    "url": "https://clatsop-so-or.zuercherportal.com/#/",
+    "jail_name": "Clatsop County OR Jail",
+    "jail_id": "clatsop-so-or",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Cherokee",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://cherokee-so-sc.zuercherportal.com/#/",
+    "jail_name": "Cherokee County SC Jail",
+    "jail_id": "cherokee-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Colleton",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://colleton-so-sc.zuercherportal.com/#/",
+    "jail_name": "Colleton County SC Jail",
+    "jail_id": "colleton-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Kershaw",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://kershaw-so-sc.zuercherportal.com/#/",
+    "jail_name": "Kershaw County SC Jail",
+    "jail_id": "kershaw-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Oconee",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://oconee-so-sc.zuercherportal.com/#/",
+    "jail_name": "Oconee County SC Jail",
+    "jail_id": "oconee-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Anderson",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://anderson-so-sc.zuercherportal.com/#/",
+    "jail_name": "Anderson County SC Jail",
+    "jail_id": "anderson-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pickens",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://pickens-so-sc.zuercherportal.com/#/",
+    "jail_name": "Pickens County SC Jail",
+    "jail_id": "pickens-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Union",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://union-so-sc.zuercherportal.com/#/",
+    "jail_name": "Union County SC Jail",
+    "jail_id": "union-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Williamsburg",
+    "state": "SC",
+    "state_abbrev": "SC",
+    "url": "https://williamsburg-so-sc.zuercherportal.com/#/",
+    "jail_name": "Williamsburg County SC Jail",
+    "jail_id": "williamsburg-so-sc",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Bennett",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://bennett-so-sd.zuercherportal.com/#/",
+    "jail_name": "Bennett County SD Jail",
+    "jail_id": "bennett-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Clay",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://clay-so-sd.zuercherportal.com/#/",
+    "jail_name": "Clay County SD Jail",
+    "jail_id": "clay-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Custer",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://custer-so-sd.zuercherportal.com/#/",
+    "jail_name": "Custer County SD Jail",
+    "jail_id": "custer-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Davison",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://davison-so-sd.zuercherportal.com/#/",
+    "jail_name": "Davison County SD Jail",
+    "jail_id": "davison-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lake",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://lake-so-sd.zuercherportal.com/#/",
+    "jail_name": "Lake County SD Jail",
+    "jail_id": "lake-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lincoln",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://lincoln-so-sd.zuercherportal.com/#/",
+    "jail_name": "Lincoln County SD Jail",
+    "jail_id": "lincoln-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lawrence",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://lawrence-so-sd.zuercherportal.com/#/",
+    "jail_name": "Lawrence County SD Jail",
+    "jail_id": "lawrence-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Marshall",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://marshall-so-sd.zuercherportal.com/#/",
+    "jail_name": "Marshall County SD Jail",
+    "jail_id": "marshall-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lyman",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://lyman-so-sd.zuercherportal.com/#/",
+    "jail_name": "Lyman County SD Jail",
+    "jail_id": "lyman-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Meade",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://meade-so-sd.zuercherportal.com/#/",
+    "jail_name": "Meade County SD Jail",
+    "jail_id": "meade-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Pennington",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://pennington-so-sd.zuercherportal.com/#/",
+    "jail_name": "Pennington County SD Jail",
+    "jail_id": "pennington-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Roberts",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://roberts-so-sd.zuercherportal.com/#/",
+    "jail_name": "Roberts County SD Jail",
+    "jail_id": "roberts-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Union",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://union-so-sd.zuercherportal.com/#/",
+    "jail_name": "Union County SD Jail",
+    "jail_id": "union-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Sully",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://sully-so-sd.zuercherportal.com/#/",
+    "jail_name": "Sully County SD Jail",
+    "jail_id": "sully-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Yankton",
+    "state": "SD",
+    "state_abbrev": "SD",
+    "url": "https://yankton-so-sd.zuercherportal.com/#/",
+    "jail_name": "Yankton County SD Jail",
+    "jail_id": "yankton-so-sd",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Sullivan",
+    "state": "TN",
+    "state_abbrev": "TN",
+    "url": "https://sullivan-so-tn.zuercherportal.com/#/",
+    "jail_name": "Sullivan County TN Jail",
+    "jail_id": "sullivan-so-tn",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Washington",
+    "state": "TN",
+    "state_abbrev": "TN",
+    "url": "https://washington-so-tn.zuercherportal.com/#/",
+    "jail_name": "Washington County TN Jail",
+    "jail_id": "washington-so-tn",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Brooks",
+    "state": "TX",
+    "state_abbrev": "TX",
+    "url": "https://brooks-so-tx.zuercherportal.com/#/",
+    "jail_name": "Brooks County TX Jail",
+    "jail_id": "brooks-so-tx",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Presidio",
+    "state": "TX",
+    "state_abbrev": "TX",
+    "url": "https://presidio-so-tx.zuercherportal.com/#/",
+    "jail_name": "Presidio County TX Jail",
+    "jail_id": "presidio-so-tx",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Upshur",
+    "state": "TX",
+    "state_abbrev": "TX",
+    "url": "https://upshur-so-tx.zuercherportal.com/#/",
+    "jail_name": "Upshur County TX Jail",
+    "jail_id": "upshur-so-tx",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Caroline",
+    "state": "VA",
+    "state_abbrev": "VA",
+    "url": "https://caroline-so-va.zuercherportal.com/#/",
+    "jail_name": "Caroline County VA Jail",
+    "jail_id": "caroline-so-va",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Northumberland",
+    "state": "VA",
+    "state_abbrev": "VA",
+    "url": "https://northumberland-so-va.zuercherportal.com/#/",
+    "jail_name": "Northumberland County VA Jail",
+    "jail_id": "northumberland-so-va",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Grant",
+    "state": "WI",
+    "state_abbrev": "WI",
+    "url": "https://grant-so-wi.zuercherportal.com/#/",
+    "jail_name": "Grant County WI Jail",
+    "jail_id": "grant-so-wi",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Dunn",
+    "state": "WI",
+    "state_abbrev": "WI",
+    "url": "https://dunn-so-wi.zuercherportal.com/#/",
+    "jail_name": "Dunn County WI Jail",
+    "jail_id": "dunn-so-wi",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Lincoln",
+    "state": "WI",
+    "state_abbrev": "WI",
+    "url": "https://lincoln-so-wi.zuercherportal.com/#/",
+    "jail_name": "Lincoln County WI Jail",
+    "jail_id": "lincoln-so-wi",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Monroe",
+    "state": "WI",
+    "state_abbrev": "WI",
+    "url": "https://monroe-so-wi.zuercherportal.com/#/",
+    "jail_name": "Monroe County WI Jail",
+    "jail_id": "monroe-so-wi",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Menominee",
+    "state": "WI",
+    "state_abbrev": "WI",
+    "url": "https://menominee-so-wi.zuercherportal.com/#/",
+    "jail_name": "Menominee County WI Jail",
+    "jail_id": "menominee-so-wi",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Washburn",
+    "state": "WI",
+    "state_abbrev": "WI",
+    "url": "https://washburn-so-wi.zuercherportal.com/#/",
+    "jail_name": "Washburn County WI Jail",
+    "jail_id": "washburn-so-wi",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  },
+  {
+    "county": "Teton",
+    "state": "WY",
+    "state_abbrev": "WY",
+    "url": "https://teton-so-wy.zuercherportal.com/#/",
+    "jail_name": "Teton County WY Jail",
+    "jail_id": "teton-so-wy",
+    "scrape_system": "zuercherportal",
+    "discovered_date": "2025-07-27",
+    "status_code": 200,
+    "indicators_found": [
+      "portal"
+    ]
+  }
+]
