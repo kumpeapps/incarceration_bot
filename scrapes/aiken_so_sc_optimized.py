@@ -15,7 +15,7 @@ from loguru import logger
 from models.Jail import Jail
 from models.Inmate import Inmate
 from scrapes.process_optimized import process_scrape_data_optimized
-from helpers.image_helper import image_url_to_base64
+from helpers.async_image_helper import cached_async_image_url_to_base64
 
 # Base URLs
 SEARCH_URL = "https://www.aikencountysc.gov/DTNSearch/DtnSchInmDspPublic_newFlex.php"
@@ -24,6 +24,7 @@ MUGSHOT_BASE_URL = "https://www.aikencountysc.gov"
 MAX_CONCURRENT_REQUESTS = 10  # Increased from 5 to speed up processing
 REQUEST_TIMEOUT = 15  # Shorter timeout to avoid hanging
 FETCH_MUGSHOTS = os.getenv("FETCH_MUGSHOTS", "False") == "True"
+MUGSHOT_TIMEOUT = int(os.getenv("MUGSHOT_TIMEOUT", "5"))  # Timeout in seconds for mugshot fetching
 
 
 def parse_date(date_str):
@@ -234,14 +235,12 @@ async def async_get_inmate_details(
             if FETCH_MUGSHOTS and name and mugshot_url:
                 full_mugshot_url = f"{MUGSHOT_BASE_URL}{mugshot_url}"
                 try:
-                    # Use a thread to fetch the image to avoid blocking
-                    with ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(image_url_to_base64, full_mugshot_url)
-                        mugshot = future.result(timeout=5)
+                    # Use our async helper to fetch the image directly
+                    mugshot = await cached_async_image_url_to_base64(session, full_mugshot_url, timeout=MUGSHOT_TIMEOUT)
+                    if not mugshot:
+                        logger.warning(f"Failed to fetch mugshot for inmate {inmate_id}")
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to fetch mugshot for inmate {inmate_id}: {str(e)}"
-                    )
+                    logger.warning(f"Error fetching mugshot for inmate {inmate_id}: {str(e)}")
                     mugshot = None
 
             # Return complete inmate object

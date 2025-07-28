@@ -143,4 +143,6 @@ services:
       # - ENABLE_JAILS_CONTAINING=<comma-separated list of jails to enable> # this enables jails that contain specified strings. Default is all jails enabled. Example: for all jails (in our database) in AR input ar.
       # - ON_DEMAND=<True/False> # Default is False. Set this to True to bypass schedule running all enabled jails immediately then exit.
       # - HEARTBEAT_WEBHOOK=<webhook_url> # Optional. Sends POST to given webhook at end of each run cycle.
+      # - FETCH_MUGSHOTS=<True/False> # Default is False. Enable to fetch mugshots for inmates.
+      # - MUGSHOT_TIMEOUT=<seconds> # Default is 5. Timeout in seconds for fetching mugshots.
 ```
