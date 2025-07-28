@@ -77,53 +77,90 @@ async def async_get_inmate_details(
             name_tag = soup.find("b", style="color:#dc0023")
             name = name_tag.text.strip() if name_tag else ""
 
-            # Get charges based on the HTML structure
+            # Get charges based on the HTML structure - completely revised approach
             charges = []
-
-            # Find the Offense section, which contains all charges
-            offense_text = None
-            offense_sections = soup.find_all(string=lambda s: s and "Offense:" in s)
-
-            for section in offense_sections:
-                parent = section.parent
-                if parent:
-                    # Get the full text content including all nested elements
-                    offense_text = parent.get_text()
-                    break
-
-            if offense_text:
-                # Split the text by "Charge:" to get individual charges
-                charge_sections = offense_text.split("Charge:")
-
-                # Skip the first section which is just the "Offense:" label
-                for section in charge_sections[1:]:
-                    # Extract the charge text up to the next "Case #:" or end of string
-                    charge_match = re.search(
-                        r"(.*?)(?:\s*Case #:|$)", section, re.DOTALL
-                    )
-                    if charge_match:
-                        charge = charge_match.group(1).strip()
-                        if charge:
+            
+            # Method 1: Find tables containing charge information
+            charge_tables = soup.find_all("table", {"width": "100%", "cellpadding": "2"})
+            for table in charge_tables:
+                table_text = table.get_text()
+                if "Charge:" in table_text:
+                    # Extract charges using regex pattern
+                    charge_matches = re.findall(r"Charge:\s*(.*?)(?:\s*Case #:|$)", table_text, re.DOTALL)
+                    for match in charge_matches:
+                        charge = match.strip()
+                        if charge and charge not in charges:
                             charges.append(charge)
-
-            # If no charges found using the primary method, try alternative approaches
+            
+            # Method 2: Look for offense sections directly
             if not charges:
-                # Try to find individual charge elements
-                charge_elements = soup.find_all(
-                    "td", string=lambda s: s and "Charge:" in s
-                )
-                for element in charge_elements:
-                    charge_text = element.text.strip()
-                    charge_match = re.search(
-                        r"Charge:\s*(.*?)(?:\s*Case #:|$)", charge_text
-                    )
-                    if charge_match:
-                        charge = charge_match.group(1).strip()
-                        if charge:
-                            charges.append(charge)
+                offense_elements = soup.find_all(lambda tag: tag.name == "td" and tag.text and "Offense:" in tag.text)
+                for element in offense_elements:
+                    # Get the parent table that contains the full offense details
+                    parent_table = element.find_parent("table")
+                    if parent_table:
+                        offense_text = parent_table.get_text()
+                        # Look for charge sections in the offense text
+                        charge_parts = re.findall(r"Charge:\s*(.*?)(?:\s*Case #:|$)", offense_text, re.DOTALL)
+                        for part in charge_parts:
+                            charge = part.strip()
+                            if charge and charge not in charges:
+                                charges.append(charge)
+            
+            # Method 3: Find individual TD elements with charge info
+            if not charges:
+                for td in soup.find_all("td"):
+                    td_text = td.get_text().strip()
+                    if td_text.startswith("Charge:"):
+                        charge_match = re.search(r"Charge:\s*(.*?)(?:\s*Case #:|$)", td_text, re.DOTALL)
+                        if charge_match:
+                            charge = charge_match.group(1).strip()
+                            if charge and charge not in charges:
+                                charges.append(charge)
+            
+            # Method 4: Look for any text containing "Charge:" anywhere in the document
+            if not charges:
+                # Get all text nodes in the document
+                all_text = soup.get_text()
+                # Find all charge patterns
+                charge_patterns = re.findall(r"Charge:\s*(.*?)(?:\s*Case #:|$)", all_text, re.DOTALL)
+                for pattern in charge_patterns:
+                    charge = pattern.strip()
+                    if charge and charge not in charges:
+                        charges.append(charge)
+                        
+            # Log what we found for debugging
+            logger.debug(f"Found {len(charges)} charges for inmate {inmate_id}")
+            for i, charge in enumerate(charges):
+                logger.debug(f"  Charge {i+1}: {charge}")
 
-            hold_reasons = ", ".join(charges) if charges else "Unknown"
-
+            # Format hold_reasons correctly
+            hold_reasons = ""
+            if charges:
+                # Join charges with a comma and space
+                hold_reasons = ", ".join(charges)
+                logger.debug(f"Final hold_reasons: '{hold_reasons}'")
+            else:
+                # If we still have no charges, look for any sentence containing "Offense" or "Charge"
+                all_text = soup.get_text()
+                offense_sentences = re.findall(r'[^.!?]*(?:Offense|Charge)[^.!?]*[.!?]', all_text)
+                if offense_sentences:
+                    cleaned_sentences = []
+                    for sentence in offense_sentences:
+                        # Remove labels and clean up the sentence
+                        cleaned = re.sub(r'(?:Offense:|Charge:)\s*', '', sentence).strip()
+                        if cleaned and len(cleaned) > 5:  # Avoid very short fragments
+                            cleaned_sentences.append(cleaned)
+                    
+                    if cleaned_sentences:
+                        hold_reasons = ", ".join(cleaned_sentences)
+                        logger.debug(f"Found hold_reasons from sentences: '{hold_reasons}'")
+                    else:
+                        hold_reasons = "Unknown"
+                else:
+                    hold_reasons = "Unknown"
+                    logger.warning(f"No charges found for inmate {inmate_id}")
+            
             # Get bio info
             bio_table = soup.find("h3", string="Bio:").find_next("table")
 
@@ -218,12 +255,19 @@ async def async_get_inmate_details(
                 "hold_reasons": hold_reasons,
                 "held_for_agency": held_for_agency,
             }
-
-            # Log the basic info for debugging
+            
+            # Enhanced logging for debugging
             logger.debug(f"Inmate {inmate_id} - name: '{name}'")
-            logger.debug(f"Inmate {inmate_id} - held_for_agency: '{held_for_agency}'")
-            logger.debug(f"Inmate {inmate_id} - hold_reasons: '{hold_reasons}'")
-
+            if held_for_agency:
+                logger.debug(f"Inmate {inmate_id} - held_for_agency: '{held_for_agency}'")
+            else:
+                logger.warning(f"Inmate {inmate_id} - No held_for_agency found!")
+                
+            if hold_reasons and hold_reasons != "Unknown":
+                logger.debug(f"Inmate {inmate_id} - hold_reasons: '{hold_reasons}'")
+            else:
+                logger.warning(f"Inmate {inmate_id} - No hold_reasons found!")
+            
             return inmate_data
 
     except Exception as e:
