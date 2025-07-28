@@ -29,6 +29,11 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
             skip = False
             if monitor.name in inmate.name:
                 logger.info(f"Matched {monitor.name} to {inmate.name}")
+                
+                # Always update last_seen_incarcerated for exact matches
+                if monitor.name == inmate.name:
+                    monitor.last_seen_incarcerated = datetime.now()  # type: ignore
+                
                 if monitor.name != inmate.name:
                     logger.info(f"Checking for full name match for {monitor.name}")
                     full_name_monitor = (

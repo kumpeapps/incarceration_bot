@@ -55,12 +55,15 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
         inmate_name = str(inmate.name)
         if inmate_name in monitor_by_exact_name:
             monitor = monitor_by_exact_name[inmate_name]
+            
+            # Always update last_seen_incarcerated when monitor is found
+            monitor.last_seen_incarcerated = datetime.now()  # type: ignore
+            
+            # Check for new arrest date
             if monitor.arrest_date != inmate.arrest_date:
                 logger.trace(f"New arrest date for {monitor.name}")
                 monitor.arrest_date = inmate.arrest_date
-                monitor.last_seen_incarcerated = datetime.now()  # type: ignore
                 monitor.send_message(inmate)
-                monitors_to_update.append(monitor)
                 inmate_processed = True
             elif (
                 inmate.release_date
@@ -70,7 +73,9 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
                 logger.info(f"New release date for {monitor.name}")
                 monitor.release_date = inmate.release_date
                 monitor.send_message(inmate, released=True)
-                monitors_to_update.append(monitor)
+            
+            # Always add to update list since we updated last_seen_incarcerated
+            monitors_to_update.append(monitor)
 
         # If no exact match, check for partial matches
         if not inmate_processed:
