@@ -12,6 +12,7 @@ from models.Jail import Jail, Inmate
 from scrapes.zuercher import scrape_zuercherportal
 from scrapes.crawford_so_ar import scrape_crawford_so_ar
 from scrapes.washington_so_ar_optimized import scrape_washington_so_ar_optimized
+from scrapes.aiken_so_sc_optimized import scrape_aiken_so_sc_optimized
 import database_connect as db
 from update_jails_db import update_jails_db
 
@@ -33,16 +34,28 @@ def enable_jails(session: Session):
     jails = session.query(Jail).all()
     for jail in jails:
         logger.trace(f"Checking {jail.jail_id}")
+        # Start with jail disabled
+        jail.active = False  # type: ignore
+
+        # Check each criteria - if any match, enable the jail
         for enable_jail in enable_jails_containing:
-            logger.trace(f"Checking {enable_jail}")
-            logger.debug(f"Checking {jail.jail_id} for {enable_jail}")
+            logger.trace(f"Checking criterion: {enable_jail}")
+            logger.debug(f"Checking if {jail.jail_id} contains {enable_jail}")
+
             if enable_jail in jail.jail_id:
-                logger.debug(f"Enabling {jail.jail_name}")
+                logger.debug(f"Enabling {jail.jail_name} (matched {enable_jail})")
                 jail.active = True  # type: ignore
-            else:
-                logger.debug(f"Disabling {jail.jail_name}")
-                jail.active = False  # type: ignore
+                break  # No need to check other criteria once we've enabled
+
     session.commit()
+
+    # Log summary of what's enabled
+    enabled_count = session.query(Jail).filter(Jail.active == True).count()  # type: ignore
+    enabled_jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+    logger.info(f"Enabled {enabled_count} jails:")
+    for jail in enabled_jails:
+        logger.info(f"  - {jail.jail_name} ({jail.jail_id})")
+
     return False
 
 
@@ -63,7 +76,9 @@ def run():
 
         def run_scrape(scrape_method, session, jail):
             nonlocal jails_completed
-            logger.debug(f"Run Scrape: Scraping {jail.jail_name} ({jail.scrape_system})")
+            logger.debug(
+                f"Run Scrape: Scraping {jail.jail_name} ({jail.scrape_system})"
+            )
             try:
                 scrape_method(session, jail)
                 jails_completed += 1
@@ -74,14 +89,25 @@ def run():
 
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
-            logger.debug(f"If scraping system: Scraping {jail.jail_name} with Zuercher Portal")
+            logger.debug(
+                f"If scraping system: Scraping {jail.jail_name} with Zuercher Portal"
+            )
             run_scrape(scrape_zuercherportal, session, jail)
         elif jail.scrape_system == "washington_so_ar":
-            logger.debug(f"If scraping system: Scraping {jail.jail_name} with Washington SO AR")
+            logger.debug(
+                f"If scraping system: Scraping {jail.jail_name} with Washington SO AR"
+            )
             run_scrape(scrape_washington_so_ar_optimized, session, jail)
         elif jail.scrape_system == "crawford_so_ar":
-            logger.debug(f"If scraping system: Scraping {jail.jail_name} with Crawford SO AR")
+            logger.debug(
+                f"If scraping system: Scraping {jail.jail_name} with Crawford SO AR"
+            )
             run_scrape(scrape_crawford_so_ar, session, jail)
+        elif jail.scrape_system == "aiken_so_sc":
+            logger.debug(
+                f"If scraping system: Scraping {jail.jail_name} with Aiken County SC (Optimized)"
+            )
+            run_scrape(scrape_aiken_so_sc_optimized, session, jail)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
     # delete_old_mugshots(session)
     session.close()
@@ -114,13 +140,10 @@ def delete_old_mugshots(session: Session):
     logger.info("Deleting Old Mugshots")
 
     cutoff_date = datetime.now() - timedelta(days=DELETE_MUGSHOTS_AFTER_DAYS)
-    query = (
-        session.query(Inmate)
-        .filter(
-            Inmate.mugshot.isnot(None),
-            Inmate.mugshot != "",
-            Inmate.in_custody_date < cutoff_date,
-        )
+    query = session.query(Inmate).filter(
+        Inmate.mugshot.isnot(None),
+        Inmate.mugshot != "",
+        Inmate.in_custody_date < cutoff_date,
     )
     num_deleted = query.update({Inmate.mugshot: None}, synchronize_session=False)
     session.commit()
