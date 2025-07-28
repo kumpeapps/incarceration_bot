@@ -148,7 +148,10 @@ def check_for_released_inmates(session: Session, current_inmates: list[Inmate], 
             logger.info(f"Monitor {monitor.name} appears to have been released from {jail.jail_name}")
             
             # Set release date to today since we don't have the exact date
-            monitor.release_date = str(datetime.now().strftime("%Y-%m-%d"))  # type: ignore
+            release_date_str = datetime.now().strftime("%Y-%m-%d")
+            logger.info(f"Setting release date for {monitor.name} to: '{release_date_str}'")
+            monitor.release_date = release_date_str  # type: ignore
+            logger.debug(f"Monitor.release_date is now: '{monitor.release_date}'")
             
             # Create a dummy inmate object for the release notification
             # We'll use the monitor's stored information
@@ -163,7 +166,7 @@ def check_for_released_inmates(session: Session, current_inmates: list[Inmate], 
                 dob="Unknown",
                 hold_reasons=monitor.arrest_reason or "Unknown",
                 is_juvenile=False,
-                release_date=monitor.release_date,
+                release_date=release_date_str,
                 in_custody_date=monitor.arrest_date or datetime.now().date(),
                 jail_id=jail.jail_id,
                 hide_record=False,

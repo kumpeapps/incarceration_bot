@@ -55,10 +55,10 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
         inmate_name = str(inmate.name)
         if inmate_name in monitor_by_exact_name:
             monitor = monitor_by_exact_name[inmate_name]
-            
+
             # Always update last_seen_incarcerated when monitor is found
             monitor.last_seen_incarcerated = datetime.now()  # type: ignore
-            
+
             # Check for new arrest date
             if monitor.arrest_date != inmate.arrest_date:
                 logger.trace(f"New arrest date for {monitor.name}")
@@ -73,7 +73,7 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
                 logger.info(f"New release date for {monitor.name}")
                 monitor.release_date = inmate.release_date
                 monitor.send_message(inmate, released=True)
-            
+
             # Always add to update list since we updated last_seen_incarcerated
             monitors_to_update.append(monitor)
 
@@ -173,54 +173,67 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
         session.rollback()
 
 
-def check_for_released_inmates(session: Session, current_inmates: List[Inmate], jail: Jail):
+def check_for_released_inmates(
+    session: Session, current_inmates: List[Inmate], jail: Jail
+):
     """
     Check for monitors that were previously incarcerated but are no longer
     in the current batch of scraped inmates, indicating they may have been released.
-    
+
     Args:
         session (Session): SQLAlchemy session for database operations.
         current_inmates (List[Inmate]): List of currently scraped inmates.
         jail (Jail): Jail object containing jail details.
     """
     logger.debug(f"Checking for released inmates in {jail.jail_name}")
-    
+
     # Get all monitors for this jail that have been seen incarcerated
     # and don't already have a release date
-    monitors_to_check = session.query(Monitor).filter(
-        Monitor.jail == jail.jail_name,
-        Monitor.last_seen_incarcerated.isnot(None),
-        Monitor.release_date.is_(None)
-    ).all()
-    
+    monitors_to_check = (
+        session.query(Monitor)
+        .filter(
+            Monitor.jail == jail.jail_name,
+            Monitor.last_seen_incarcerated.isnot(None),
+            Monitor.release_date.is_(None),
+        )
+        .all()
+    )
+
     if not monitors_to_check:
         logger.debug(f"No monitors to check for releases in {jail.jail_name}")
         return
-    
+
     logger.debug(f"Found {len(monitors_to_check)} monitors to check for releases")
-    
+
     # Create a set of current inmate names for fast lookup
-    current_inmate_names = {str(inmate.name).strip().lower() for inmate in current_inmates}
-    
+    current_inmate_names = {
+        str(inmate.name).strip().lower() for inmate in current_inmates
+    }
+
     released_monitors = []
-    
+
     for monitor in monitors_to_check:
         monitor_name = str(monitor.name).strip().lower()
-        
+
         # Check if monitor is still in current inmates list
         if monitor_name not in current_inmate_names:
             # Monitor not found in current inmates - likely released
-            logger.info(f"Monitor {monitor.name} appears to have been released from {jail.jail_name}")
-            
+            logger.info(
+                f"Monitor {monitor.name} appears to have been released from {jail.jail_name}"
+            )
+
             # Set release date to today since we don't have the exact date
-            monitor.release_date = str(datetime.now().strftime("%Y-%m-%d"))  # type: ignore
-            
+            release_date_str = datetime.now().strftime("%Y-%m-%d")
+            logger.info(f"Setting release date for {monitor.name} to: '{release_date_str}'")
+            monitor.release_date = release_date_str  # type: ignore
+            logger.debug(f"Monitor.release_date is now: '{monitor.release_date}'")
+
             # Create a dummy inmate object for the release notification
             # We'll use the monitor's stored information
             dummy_inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
                 name=monitor.name,
                 race="Unknown",
-                sex="Unknown", 
+                sex="Unknown",
                 cell_block=None,
                 arrest_date=monitor.arrest_date,
                 held_for_agency=monitor.arresting_agency or "Unknown",
@@ -228,23 +241,27 @@ def check_for_released_inmates(session: Session, current_inmates: List[Inmate], 
                 dob="Unknown",
                 hold_reasons=monitor.arrest_reason or "Unknown",
                 is_juvenile=False,
-                release_date=monitor.release_date,
+                release_date=release_date_str,
                 in_custody_date=monitor.arrest_date or datetime.now().date(),
                 jail_id=jail.jail_id,
                 hide_record=False,
             )
-            
+
             # Send release notification
             try:
                 monitor.send_message(dummy_inmate, released=True)
                 logger.success(f"Sent release notification for {monitor.name}")
             except Exception as error:
-                logger.error(f"Failed to send release notification for {monitor.name}: {error}")
-            
+                logger.error(
+                    f"Failed to send release notification for {monitor.name}: {error}"
+                )
+
             released_monitors.append(monitor)
-    
+
     if released_monitors:
-        logger.info(f"Marked {len(released_monitors)} monitors as released from {jail.jail_name}")
+        logger.info(
+            f"Marked {len(released_monitors)} monitors as released from {jail.jail_name}"
+        )
     else:
         logger.debug(f"No releases detected in {jail.jail_name}")
 
