@@ -222,9 +222,16 @@ def check_for_released_inmates(
                 f"Monitor {monitor.name} appears to have been released from {jail.jail_name}"
             )
 
-            # Set release date to today since we don't have the exact date
-            release_date_str = datetime.now().strftime("%Y-%m-%d")
-            logger.info(f"Setting release date for {monitor.name} to: '{release_date_str}'")
+            # Prefer to use the last date the inmate was seen as the release date, if available
+            last_seen_date = getattr(monitor, "last_seen_date", None)
+            if last_seen_date:
+                release_date_str = last_seen_date.strftime("%Y-%m-%d")
+                logger.info(f"Setting release date for {monitor.name} to last seen date: '{release_date_str}'")
+            else:
+                release_date_str = datetime.now().strftime("%Y-%m-%d")
+                logger.warning(
+                    f"Release date for {monitor.name} is uncertain; using current date '{release_date_str}' as fallback"
+                )
             monitor.release_date = release_date_str  # type: ignore
             logger.debug(f"Monitor.release_date is now: '{monitor.release_date}'")
 
