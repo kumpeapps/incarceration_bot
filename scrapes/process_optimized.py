@@ -63,6 +63,7 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
             if monitor.arrest_date != inmate.arrest_date:
                 logger.trace(f"New arrest date for {monitor.name}")
                 monitor.arrest_date = inmate.arrest_date
+                monitor.release_date = None # type: ignore
                 monitor.send_message(inmate)
                 inmate_processed = True
             elif (
