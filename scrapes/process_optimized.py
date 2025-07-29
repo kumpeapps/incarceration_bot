@@ -99,7 +99,7 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
                         new_monitor = Monitor(  # pylint: disable=unexpected-keyword-arg
                             name=inmate.name,
                             arrest_date=inmate.arrest_date,
-                            release_date=inmate.release_date,
+                            release_date=None,
                             jail=jail.jail_name,
                             mugshot=inmate.mugshot,
                             enable_notifications=monitor.enable_notifications,
