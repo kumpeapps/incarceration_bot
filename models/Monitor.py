@@ -106,7 +106,7 @@ class Monitor(Base):
                             "priority": pushover_priority,
                             "token": pushover_api_key,
                             "user": user_key,
-                            "attachment_base64": self.mugshot,
+                            "attachment_base64": inmate.mugshot,
                             "attachment_type": "image/jpeg",
                         }
                     ),
