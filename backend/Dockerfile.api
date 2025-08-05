@@ -1,0 +1,30 @@
+FROM python:3.11.9-slim
+
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies for building Python packages
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /app/requirements.txt
+WORKDIR /app
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Remove build dependencies to reduce image size
+RUN apt-get remove -y gcc g++ make && \
+    apt-get autoremove -y && \
+    apt-get clean
+
+COPY . /app
+
+# Expose port for API
+EXPOSE 8000
+
+# Default command runs the scraper, but can be overridden for API
+CMD [ "python", "main.py" ]

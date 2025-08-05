@@ -1,6 +1,10 @@
 services:
   incarceration_bot:
     image: "incarceration_bot:latest"
+    # For local development, uncomment the following and comment out the image line above:
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile
     environment:
       # - TZ=America/Chicago # Defaults to UTC if not specified
       # - DATABASE_URI=<database_uri> #(only if not using mysql variables)

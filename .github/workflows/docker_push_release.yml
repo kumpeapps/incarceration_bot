@@ -18,4 +18,4 @@ jobs:
         run: |
             docker buildx build --push \
                 --tag justinkumpe/incarceration_bot:${{ github.ref_name }} \
-                --platform linux/amd64,linux/arm/v7,linux/arm64 .
+                --platform linux/amd64,linux/arm/v7,linux/arm64 ./backend

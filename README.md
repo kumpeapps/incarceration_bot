@@ -3,8 +3,18 @@
  
 This bot is a docker container for scraping jail websites and saving inmate data to your database.
 
-### Current Jails
-##### Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it pretty quickly). Other jails need to figure out how to scrape the website first
+## Project Structure
+
+- `backend/` - Python backend application (main scraping bot + FastAPI web API)
+- `frontend/` - React-based web interface for managing inmates and monitors
+- `.github/` - GitHub workflows and configurations
+- `docker-compose.yml.example` - Example Docker Compose configuration for backend only
+- `docker-compose.full.yml` - Full stack Docker Compose with frontend, backend API, scraper, and database
+
+## Current Jails
+
+Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it pretty quickly). Other jails need to figure out how to scrape the website first.
+
 | State    | Jail              | Jail ID          | Added In Version | Mugshot                     |
 |----------|-------------------|------------------|------------------|-----------------------------|
 | Arkansas | Benton County     | benton-so-ar     | 1.0.0            | :white_check_mark:          |
@@ -122,12 +132,50 @@ This bot is a docker container for scraping jail websites and saving inmate data
 | Wisconsin | Washburn County | washburn-so-wi  | 3.0.0            | :white_check_mark: |
 | Wyoming  | Teton County    | teton-so-wy     | 3.0.0            | :white_check_mark: |
 
+## Web Interface
+
+The project now includes a modern React-based web interface that provides:
+
+- **Dashboard**: Overview of system statistics and recent activity
+- **Inmate Search**: Search and view detailed inmate information across all monitored jails
+- **Monitor Management**: Add, edit, and manage arrest monitors with notification settings
+- **User Management**: User authentication and role-based access control
+- **Jail Management**: View and manage jail configurations
+
+### Quick Start with Web Interface
+
+1. Copy the environment file and configure your settings:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your database and other configuration
+   ```
+
+2. Start the full stack (frontend, API, scraper, and database):
+
+   ```bash
+   docker-compose -f docker-compose.full.yml up -d
+   ```
+
+3. Access the web interface:
+   - Frontend: <http://localhost:3000>
+   - API Documentation: <http://localhost:8000/docs>
+   - Database Admin: <http://localhost:8080>
+
+4. Default login credentials:
+   - Admin: username `admin`, password `admin123`
+   - User: username `user`, password `user123`
+
 ### Example Docker Compose File
 
 ```yaml
 services:
   incarceration_bot:
-    image: "incarceration_bot:latest"
+    image: "justinkumpe/incarceration_bot:latest"
+    # For local development, uncomment the following and comment out the image line above:
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile
     environment:
       # - TZ=America/Chicago # Defaults to UTC if not specified
       # - DATABASE_URI=<database_uri> #(only if not using mysql variables)
