@@ -1,22 +1,80 @@
 services:
   incarceration_bot:
-    image: "incarceration_bot:latest"
+    # Use published image
+    image: "justinkumpe/incarceration_bot:latest"
     # For local development, uncomment the following and comment out the image line above:
     # build:
     #   context: ./backend
     #   dockerfile: Dockerfile
     environment:
-      # - TZ=America/Chicago # Defaults to UTC if not specified
-      # - DATABASE_URI=<database_uri> #(only if not using mysql variables)
-      # - MYSQL_SERVER=<mysql_server>
-      # - MYSQL_USERNAME=<mysql_username>
-      # - MYSQL_PASSWORD=<mysql_password>
-      # - MYSQL_DATABASE=<mysql_database>
-      # - MYSQL_PORT=<mysql_port> # default is 3306 if not specified
-      # - PUSHOVER_API_KEY=<pushover_api_key> # Pushover disabled if not specified
-      # - PUSHOVER_PRIORITY=<pushover_priority> # default 1 if not specified
-      # - PUSHOVER_SOUND=<pushover_sound> # Pushover default used if not specified
-      # - RUN_SCHEDULE=<hours to run in 00:00 format comma-separated> # If not specified default is 01:00,05:00,09:00,13:00,17:00,21:00
-      # - ENABLE_JAILS_CONTAINING=<comma-separated list of jails to enable> # this enables jails that contain specified strings. Default is all jails enabled. Example: for all jails (in our database) in AR input ar.
-      # - ON_DEMAND=<True/False> # Default is false. Set this to True to bypass schedule running all enabled jails immediately then exit.
-      # - HEARTBEAT_WEBHOOK=<webhook_url> # Optional. Sends POST to given webhook at end of each run cycle.
+      # Database Configuration
+      - DB_HOST=your-database-host
+      - DB_PORT=3306
+      - DB_USER=your-database-user
+      - DB_PASSWORD=your-database-password
+      - DB_NAME=your-database-name
+      - DB_TYPE=mysql
+      # Application Configuration
+      - TZ=America/Chicago
+      - ON_DEMAND=False
+      - ENABLE_JAILS_CONTAINING=so-ar,aiken-so-sc
+      - LOG_LEVEL=INFO
+      - FETCH_MUGSHOTS=True
+      - MUGSHOT_TIMEOUT=5
+      # Pushover Configuration (leave empty to disable notifications)
+      - PUSHOVER_API_KEY=
+      - PUSHOVER_PRIORITY=1
+      - PUSHOVER_SOUND=default
+      # Optional: Schedule configuration (default: 01:00,05:00,09:00,13:00,17:00,21:00)
+      # - RUN_SCHEDULE=01:00,05:00,09:00,13:00,17:00,21:00
+      # Optional: Heartbeat webhook
+      # - HEARTBEAT_WEBHOOK=https://your-webhook-url
+    networks:
+      - incarceration_network
+    restart: unless-stopped
+
+  backend_api:
+    # Use published image
+    image: "justinkumpe/incarceration_bot_api:latest"
+    # For local development, uncomment the following and comment out the image line above:
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      # Database Configuration
+      - DB_HOST=your-database-host
+      - DB_PORT=3306
+      - DB_USER=your-database-user
+      - DB_PASSWORD=your-database-password
+      - DB_NAME=your-database-name
+      - DB_TYPE=mysql
+      # Application Configuration
+      - TZ=America/Chicago
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+    networks:
+      - incarceration_network
+    restart: unless-stopped
+
+  frontend:
+    # Use published image
+    image: "justinkumpe/incarceration_bot_frontend:latest"
+    # For local development, uncomment the following and comment out the image line above:
+    # build:
+    #   context: ./frontend
+    #   dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_APP_TITLE=Incarceration Bot Dashboard
+    depends_on:
+      - backend_api
+    networks:
+      - incarceration_network
+    restart: unless-stopped
+
+networks:
+  incarceration_network:
+    driver: bridge
