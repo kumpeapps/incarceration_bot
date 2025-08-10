@@ -178,6 +178,18 @@ const UsersPage: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     try {
+      // Handle YYYY-MM-DD format without timezone conversion
+      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const dateParts = dateStr.split('-');
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]);
+        const day = parseInt(dateParts[2]);
+        
+        // Create date with explicit timezone-neutral values
+        const date = new Date(year, month - 1, day);
+        return date.toLocaleDateString();
+      }
+      
       return new Date(dateStr).toLocaleDateString();
     } catch {
       return 'N/A';
@@ -235,6 +247,7 @@ const UsersPage: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell>ID</TableCell>
               <TableCell>Username</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
@@ -246,7 +259,7 @@ const UsersPage: React.FC = () => {
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={7} align="center">
                   <Typography color="textSecondary">
                     No users found
                   </Typography>
@@ -255,6 +268,11 @@ const UsersPage: React.FC = () => {
             ) : (
               users.map((userItem) => (
                 <TableRow key={userItem.id} hover>
+                  <TableCell>
+                    <Typography variant="body2" color="textSecondary">
+                      {userItem.id}
+                    </Typography>
+                  </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="medium">
                       {userItem.username}

@@ -10,6 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 import InmatesPage from './pages/InmatesPage';
 import InmateDetailPage from './pages/InmateDetailPage';
 import MonitorsPage from './pages/MonitorsPage';
+import MonitorDetailPage from './pages/MonitorDetailPage';
 import UsersPage from './pages/UsersPage';
 
 const theme = createTheme({
@@ -45,6 +46,7 @@ function App() {
               <Route path="inmates" element={<InmatesPage />} />
               <Route path="inmates/:id" element={<InmateDetailPage />} />
               <Route path="monitors" element={<MonitorsPage />} />
+              <Route path="monitors/:id" element={<MonitorDetailPage />} />
               <Route path="users" element={<UsersPage />} />
             </Route>
           </Routes>

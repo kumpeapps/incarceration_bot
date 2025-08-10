@@ -131,6 +131,34 @@ class ApiService {
     return response.data;
   }
 
+  // Monitor-Inmate Link Management
+  async getMonitorInmateLinks(monitorId: number): Promise<any[]> {
+    const response = await this.api.get(`/monitors/${monitorId}/inmate-links`);
+    return response.data;
+  }
+
+  async createMonitorInmateLink(monitorId: number, data: {
+    inmate_id: number;
+    is_excluded: boolean;
+    link_reason?: string;
+  }): Promise<any> {
+    const response = await this.api.post(`/monitors/${monitorId}/inmate-links`, data);
+    return response.data;
+  }
+
+  async updateMonitorInmateLink(monitorId: number, linkId: number, data: {
+    is_excluded: boolean;
+    link_reason?: string;
+  }): Promise<any> {
+    const response = await this.api.put(`/monitors/${monitorId}/inmate-links/${linkId}`, data);
+    return response.data;
+  }
+
+  async deleteMonitorInmateLink(monitorId: number, linkId: number): Promise<{ message: string }> {
+    const response = await this.api.delete(`/monitors/${monitorId}/inmate-links/${linkId}`);
+    return response.data;
+  }
+
   async getUserMonitors(userId: number): Promise<PaginatedResponse<Monitor>> {
     const response = await this.api.get(`/users/${userId}/monitors`);
     return response.data;
@@ -177,6 +205,10 @@ class ApiService {
       current_password: currentPassword,
       new_password: newPassword,
     });
+  }
+
+  async linkMonitor(monitorId: number, linkData: { linked_monitor_id: number; link_reason?: string }): Promise<void> {
+    await this.api.post(`/monitors/${monitorId}/link`, linkData);
   }
 }
 

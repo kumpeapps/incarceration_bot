@@ -72,6 +72,28 @@ const InmateDetailPage: React.FC = () => {
   const formatDate = (dateStr?: string) => {
     if (!dateStr || dateStr === '' || dateStr === 'Unknown') return 'N/A';
     try {
+      // Handle YYYY-MM-DD format without timezone conversion
+      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const dateParts = dateStr.split('-');
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]);
+        const day = parseInt(dateParts[2]);
+        
+        // Create date with explicit timezone-neutral values
+        const date = new Date(year, month - 1, day);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          return 'N/A';
+        }
+        
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+      }
+      
       // Parse date as local date without timezone conversion
       // This prevents 2025-08-08 from being converted to 2025-08-07 due to UTC/local timezone differences
       let date;

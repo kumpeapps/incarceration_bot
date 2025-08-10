@@ -10,7 +10,7 @@ from models.Monitor import Monitor
 from helpers.insert_ignore import insert_ignore
 
 
-def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
+def process_scraped_inmates(session: Session, inmates: list[Inmate], jail: Jail):
     """
     Process scraped inmate data and update the database.
 
@@ -24,39 +24,66 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
     """
     logger.info(f"Processing {jail.jail_name}")
     monitors = session.query(Monitor).all()
+    
+    # Track processed inmate-monitor combinations to avoid duplicate notifications
+    processed_combinations = set()
+    
     for inmate in inmates:
-        for monitor in monitors:
-            skip = False
-            if monitor.name in inmate.name:
-                logger.info(f"Matched {monitor.name} to {inmate.name}")
+        # First, find all exact matches and notify all users
+        exact_matches = [m for m in monitors if m.name == inmate.name]
+        
+        if exact_matches:
+            logger.info(f"Found {len(exact_matches)} exact match(es) for {inmate.name}")
+            for monitor in exact_matches:
+                combination_key = f"{inmate.name}_{monitor.id}_{inmate.arrest_date}"
+                if combination_key in processed_combinations:
+                    continue
+                processed_combinations.add(combination_key)
+                
+                logger.info(f"Processing exact match: {monitor.name} (Monitor ID: {monitor.id}, User ID: {monitor.user_id})")
                 
                 # Always update last_seen_incarcerated for exact matches
-                if monitor.name == inmate.name:
-                    monitor.last_seen_incarcerated = datetime.now()  # type: ignore
+                monitor.last_seen_incarcerated = datetime.now()  # type: ignore
                 
-                if monitor.name != inmate.name:
-                    logger.info(f"Checking for full name match for {monitor.name}")
-                    full_name_monitor = (
-                        session.query(Monitor)
-                        .filter(Monitor.name == inmate.name)
-                        .first()
-                    )
-                    if full_name_monitor:
-                        logger.info(
-                            f"Found full name match for {inmate.name}, Skipping partial match"
-                        )
-                        skip = True
-                    else:
-                        logger.info("No full name match found.")
-                if monitor.arrest_date != inmate.arrest_date and not skip:
-                    logger.trace(f"New arrest date for {monitor.name}")
-                    if monitor.name == inmate.name:
-                        logger.trace(f"Found exact match for {monitor.name}")
-                        monitor.arrest_date = inmate.arrest_date
-                        monitor.last_seen_incarcerated = datetime.now() # type: ignore
-                    else:
-                        logger.trace(f"Found partial match for {monitor.name}.")
-                        logger.success(f"Creating new monitor for {inmate.name}")
+                # Check for new arrest
+                if monitor.arrest_date != inmate.arrest_date:
+                    logger.trace(f"New arrest date for {monitor.name} (Monitor ID: {monitor.id})")
+                    monitor.arrest_date = inmate.arrest_date
+                    monitor.last_seen_incarcerated = datetime.now() # type: ignore
+                    monitor.send_message(inmate)
+                    try:
+                        session.commit()
+                    except IntegrityError as error:
+                        logger.debug(f"Failed to commit monitor update: {error}")
+                        session.rollback()
+                
+                # Check for release
+                elif (
+                    inmate.release_date
+                    and monitor.release_date != inmate.release_date
+                    and inmate.release_date != ""
+                ):
+                    logger.info(f"New release date for {monitor.name} (Monitor ID: {monitor.id})")
+                    monitor.release_date = inmate.release_date
+                    monitor.send_message(inmate, released=True)
+        
+        # Then, handle partial matches only if no exact matches exist
+        else:
+            for monitor in monitors:
+                if monitor.name in inmate.name and monitor.name != inmate.name:
+                    combination_key = f"{inmate.name}_{monitor.id}_{inmate.arrest_date}"
+                    if combination_key in processed_combinations:
+                        continue
+                    processed_combinations.add(combination_key)
+                    
+                    logger.info(f"Processing partial match: {monitor.name} -> {inmate.name} (Monitor ID: {monitor.id})")
+                    
+                    # Always update last_seen_incarcerated for partial matches
+                    monitor.last_seen_incarcerated = datetime.now()  # type: ignore
+                    
+                    if monitor.arrest_date != inmate.arrest_date:
+                        logger.trace(f"New arrest date for partial match {monitor.name}")
+                        logger.success(f"Creating new monitor for {inmate.name} based on partial match")
                         new_monitor = Monitor(  # pylint: disable=unexpected-keyword-arg
                             name=inmate.name,
                             arrest_date=inmate.arrest_date,
@@ -67,22 +94,17 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
                             notify_method=monitor.notify_method,
                             notify_address=monitor.notify_address,
                             last_seen_incarcerated=datetime.now(),
+                            user_id=monitor.user_id  # Keep same user for the new monitor
                         )
                         session.add(new_monitor)
-                    monitor.send_message(inmate)
-                    try:
-                        session.commit()
-                    except IntegrityError as error:
-                        logger.debug(f"Failed to commit new monitor: {error}")
-                        session.rollback()
-                elif (
-                    inmate.release_date
-                    and monitor.release_date != inmate.release_date
-                    and inmate.release_date != ""
-                ):
-                    logger.info(f"New release date for {monitor.name}")
-                    monitor.release_date = inmate.release_date
-                    monitor.send_message(inmate, released=True)
+                        monitor.send_message(inmate)
+                        try:
+                            session.commit()
+                        except IntegrityError as error:
+                            logger.debug(f"Failed to commit new monitor: {error}")
+                            session.rollback()
+        
+        # Insert the inmate record
         try:
             insert_ignore(session, Inmate, inmate.to_dict())
             logger.debug(f"Inserted inmate: {inmate.name}")
@@ -93,6 +115,7 @@ def process_scrape_data(session: Session, inmates: list[Inmate], jail: Jail):
             except IntegrityError:
                 logger.debug(f"Failed to add inmate: {error}")
                 session.rollback()
+    
     session.commit()
 
     # Check for released inmates (those no longer in jail)
@@ -145,11 +168,11 @@ def check_for_released_inmates(session: Session, current_inmates: list[Inmate], 
         # Check if monitor is still in current inmates list
         if monitor_name not in current_inmate_names:
             # Monitor not found in current inmates - likely released
-            logger.info(f"Monitor {monitor.name} appears to have been released from {jail.jail_name}")
+            logger.info(f"Monitor {monitor.name} (ID: {monitor.id}, User ID: {monitor.user_id}) appears to have been released from {jail.jail_name}")
             
             # Set release date to today since we don't have the exact date
             release_date_str = datetime.now().strftime("%Y-%m-%d")
-            logger.info(f"Setting release date for {monitor.name} to: '{release_date_str}'")
+            logger.info(f"Setting release date for {monitor.name} (Monitor ID: {monitor.id}) to: '{release_date_str}'")
             monitor.release_date = release_date_str  # type: ignore
             logger.debug(f"Monitor.release_date is now: '{monitor.release_date}'")
             
@@ -175,9 +198,9 @@ def check_for_released_inmates(session: Session, current_inmates: list[Inmate], 
             # Send release notification
             try:
                 monitor.send_message(dummy_inmate, released=True)
-                logger.success(f"Sent release notification for {monitor.name}")
+                logger.success(f"Sent release notification for {monitor.name} (Monitor ID: {monitor.id}, User ID: {monitor.user_id})")
             except Exception as error:
-                logger.error(f"Failed to send release notification for {monitor.name}: {error}")
+                logger.error(f"Failed to send release notification for {monitor.name} (Monitor ID: {monitor.id}): {error}")
             
             released_monitors.append(monitor)
     

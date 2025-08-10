@@ -4,7 +4,9 @@
 			"path": "."
 		}
 	],
-	"settings": {},
+	"settings": {
+		"standard.enable": false
+	},
 	"extensions": {
 		"recommendations": [
 			"codacy-app.codacy"

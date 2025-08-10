@@ -1,7 +1,7 @@
 """fix unique constraint and deduplicate
 
 Revision ID: b47722ea223c
-Revises: 003
+Revises: 001
 Create Date: 2025-08-09 15:30:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision = 'b47722ea223c'
-down_revision = '003'
+down_revision = '001'
 branch_labels = None
 depends_on = None
 

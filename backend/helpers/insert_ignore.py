@@ -27,7 +27,7 @@ def upsert_inmate(session: Session, inmate_data: dict, auto_commit: bool = False
     """
     Insert inmate or update last_seen if duplicate exists.
     Uses MySQL's ON DUPLICATE KEY UPDATE for performance.
-    Works with current unique constraint: name, race, dob, sex, hold_reasons, in_custody_date, release_date, jail_id
+    Works with current unique constraint: name, race, dob, sex, arrest_date, jail_id
     """
     engine = session.get_bind()
     if engine.dialect.name == "mysql":
@@ -47,7 +47,10 @@ def upsert_inmate(session: Session, inmate_data: dict, auto_commit: bool = False
                 cell_block = VALUES(cell_block),
                 arrest_date = VALUES(arrest_date),
                 held_for_agency = VALUES(held_for_agency),
-                mugshot = VALUES(mugshot)
+                mugshot = VALUES(mugshot),
+                in_custody_date = VALUES(in_custody_date),
+                release_date = VALUES(release_date),
+                hold_reasons = VALUES(hold_reasons)
         """)
         
         # Ensure last_seen is set to current time

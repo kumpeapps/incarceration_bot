@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -51,6 +52,7 @@ interface MonitorFormData {
 }
 
 const MonitorsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -168,18 +170,8 @@ const MonitorsPage: React.FC = () => {
     }
   };
 
-  const handleViewInmateRecord = async (monitor: Monitor) => {
-    try {
-      setLoading(true);
-      const inmateRecord = await apiService.getMonitorInmateRecord(monitor.id);
-      // Show the inmate record in a dialog or navigate to a detail page
-      alert(`Inmate Record for ${monitor.name}:\n${JSON.stringify(inmateRecord, null, 2)}`);
-    } catch (err) {
-      console.error('Failed to fetch inmate record:', err);
-      setError('Failed to fetch inmate record');
-    } finally {
-      setLoading(false);
-    }
+  const handleViewInmateRecord = (monitor: Monitor) => {
+    navigate(`/monitors/${monitor.id}`);
   };
 
   const handleAssignMonitor = async (monitor: Monitor) => {
@@ -217,6 +209,18 @@ const MonitorsPage: React.FC = () => {
   const formatDate = (dateStr?: string) => {
     if (!dateStr || dateStr === '') return 'N/A';
     try {
+      // Handle YYYY-MM-DD format without timezone conversion
+      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const dateParts = dateStr.split('-');
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]);
+        const day = parseInt(dateParts[2]);
+        
+        // Create date with explicit timezone-neutral values
+        const date = new Date(year, month - 1, day);
+        return date.toLocaleDateString();
+      }
+      
       return new Date(dateStr).toLocaleDateString();
     } catch {
       return dateStr;

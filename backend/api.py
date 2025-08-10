@@ -17,6 +17,7 @@ from passlib.context import CryptContext
 from models.Inmate import Inmate
 from models.Monitor import Monitor
 from models.MonitorLink import MonitorLink
+from models.MonitorInmateLink import MonitorInmateLink
 from models.Jail import Jail
 from models.User import User
 import database_connect as db
@@ -37,6 +38,13 @@ security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Helper function to format dates without timezone conversion
+def format_date_only(date_obj):
+    """Format date object as YYYY-MM-DD string without timezone conversion"""
+    if date_obj is None:
+        return None
+    return date_obj.strftime('%Y-%m-%d') if hasattr(date_obj, 'strftime') else str(date_obj)
 
 # Pydantic models for API
 class LoginRequest(BaseModel):
@@ -95,6 +103,15 @@ class MonitorCreate(BaseModel):
 
 class MonitorLinkCreate(BaseModel):
     linked_monitor_id: int
+    link_reason: Optional[str] = None
+
+class MonitorInmateLinkCreate(BaseModel):
+    inmate_id: int
+    is_excluded: bool = False
+    link_reason: Optional[str] = None
+
+class MonitorInmateLinkUpdate(BaseModel):
+    is_excluded: bool
     link_reason: Optional[str] = None
 
 class PaginatedResponse(BaseModel):
@@ -262,14 +279,14 @@ async def get_inmates(
             'race': row.race,
             'sex': row.sex,
             'cell_block': row.cell_block,
-            'arrest_date': row.arrest_date.isoformat() if row.arrest_date else None,
+            'arrest_date': format_date_only(row.arrest_date),
             'held_for_agency': row.held_for_agency,
             'mugshot': row.mugshot,
             'dob': row.dob,
             'hold_reasons': row.hold_reasons,
             'is_juvenile': row.is_juvenile,
             'release_date': row.release_date,
-            'in_custody_date': row.in_custody_date.isoformat() if row.in_custody_date else None,
+            'in_custody_date': format_date_only(row.in_custody_date),
             'jail_id': row.jail_id,
             'hide_record': row.hide_record
         }
@@ -299,12 +316,12 @@ async def get_inmates(
             # Add enhanced fields
             inmate_dict['actual_status'] = actual_status
             inmate_dict['total_records'] = enhancement_data.total_records
-            inmate_dict['first_booking_date'] = enhancement_data.first_booking.isoformat() if enhancement_data.first_booking else None
+            inmate_dict['first_booking_date'] = format_date_only(enhancement_data.first_booking)
         else:
             # Fallback if query fails
             inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
             inmate_dict['total_records'] = 1
-            inmate_dict['first_booking_date'] = row.in_custody_date.isoformat() if row.in_custody_date else None
+            inmate_dict['first_booking_date'] = format_date_only(row.in_custody_date)
         
         enhanced_inmates.append(inmate_dict)
     
@@ -315,6 +332,35 @@ async def get_inmates(
         limit=limit,
         pages=(total + limit - 1) // limit
     )
+
+# Search inmates for linking
+@app.get("/inmates/search")
+async def search_inmates(
+    q: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Search inmates by name for linking purposes"""
+    if len(q) < 2:
+        raise HTTPException(status_code=400, detail="Search query must be at least 2 characters")
+    
+    # Search by name (case-insensitive)
+    inmates = db.query(Inmate).filter(
+        Inmate.name.ilike(f"%{q}%")
+    ).limit(50).all()
+    
+    results = []
+    for inmate in inmates:
+        results.append({
+            "id": inmate.id,
+            "name": inmate.name,
+            "dob": inmate.dob,
+            "jail_id": inmate.jail_id,
+            "arrest_date": format_date_only(inmate.arrest_date),
+            "actual_status": 'released' if (inmate.release_date and inmate.release_date.strip()) else 'in_custody'
+        })
+    
+    return results
 
 @app.get("/inmates/{inmate_id}")
 async def get_inmate(
@@ -339,14 +385,14 @@ async def get_inmate(
         'race': row.race,
         'sex': row.sex,
         'cell_block': row.cell_block,
-        'arrest_date': row.arrest_date.isoformat() if row.arrest_date else None,
+        'arrest_date': format_date_only(row.arrest_date),
         'held_for_agency': row.held_for_agency,
         'mugshot': row.mugshot,
         'dob': row.dob,
         'hold_reasons': row.hold_reasons,
         'is_juvenile': row.is_juvenile,
         'release_date': row.release_date,
-        'in_custody_date': row.in_custody_date.isoformat() if row.in_custody_date else None,
+        'in_custody_date': format_date_only(row.in_custody_date),
         'jail_id': row.jail_id,
         'hide_record': row.hide_record
     }
@@ -355,14 +401,7 @@ async def get_inmate(
     enhancement_query = text("""
         SELECT COUNT(*) as total_records,
                MIN(in_custody_date) as first_booking,
-               MAX(in_custody_date) as latest_booking,
-               GROUP_CONCAT(DISTINCT in_custody_date ORDER BY in_custody_date) as all_custody_dates,
-               GROUP_CONCAT(DISTINCT release_date) as all_releases,
-               CASE 
-                   WHEN MAX(in_custody_date) < CURDATE() THEN 'released'
-                   WHEN SUM(CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END) > 0 THEN 'in_custody'
-                   ELSE 'released'
-               END as computed_status
+               GROUP_CONCAT(DISTINCT in_custody_date ORDER BY in_custody_date) as all_custody_dates
         FROM inmates 
         WHERE name = :name AND dob = :dob AND jail_id = :jail_id
     """)
@@ -374,15 +413,12 @@ async def get_inmate(
     })
     enhancement_data = enhancement_result.fetchone()
     
+    # Always use the individual record's release_date for status determination
+    inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
+    
     if enhancement_data:
-        # Use the computed status from the SQL query which considers date logic
-        inmate_dict['actual_status'] = enhancement_data.computed_status
         inmate_dict['total_records'] = enhancement_data.total_records
-        inmate_dict['first_booking_date'] = enhancement_data.first_booking.isoformat() if enhancement_data.first_booking else None
-        
-        # Update in_custody_date to show the latest custody date
-        if enhancement_data.latest_booking:
-            inmate_dict['in_custody_date'] = enhancement_data.latest_booking.isoformat()
+        inmate_dict['first_booking_date'] = format_date_only(enhancement_data.first_booking)
         
         # Parse custody dates
         if enhancement_data.all_custody_dates:
@@ -391,21 +427,9 @@ async def get_inmate(
         else:
             inmate_dict['all_custody_dates'] = []
     else:
-        # Fallback with date-based logic
-        from datetime import date
-        today = date.today()
-        custody_date = row.in_custody_date.date() if row.in_custody_date else None
-        
-        if custody_date and custody_date < today:
-            inmate_dict['actual_status'] = 'released'
-        elif row.release_date and row.release_date.strip():
-            inmate_dict['actual_status'] = 'released'
-        else:
-            inmate_dict['actual_status'] = 'in_custody'
-            
         inmate_dict['total_records'] = 1
-        inmate_dict['first_booking_date'] = row.in_custody_date.isoformat() if row.in_custody_date else None
-        inmate_dict['all_custody_dates'] = [row.in_custody_date.isoformat()] if row.in_custody_date else []
+        inmate_dict['first_booking_date'] = format_date_only(row.in_custody_date)
+        inmate_dict['all_custody_dates'] = [format_date_only(row.in_custody_date)] if row.in_custody_date else []
     
     return inmate_dict
 
@@ -450,6 +474,22 @@ async def create_monitor(
     db.add(monitor)
     db.commit()
     db.refresh(monitor)
+    return monitor.to_dict()
+
+@app.get("/monitors/{monitor_id}")
+async def get_monitor(
+    monitor_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    # Users can only view their own monitors, admins can view any
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this monitor")
+    
     return monitor.to_dict()
 
 @app.put("/monitors/{monitor_id}")
@@ -513,6 +553,88 @@ async def get_users(current_user: User = Depends(get_current_user), db: Session 
     
     users = db.query(User).all()
     return [user.to_dict() for user in users]
+
+@app.post("/users")
+async def create_user(user_data: UserCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if username already exists
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Check if email already exists
+    existing_email = db.query(User).filter(User.email == user_data.email).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already exists")
+    
+    # Create new user
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=User.hash_password(user_data.password),
+        role=user_data.role
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return new_user.to_dict()
+
+@app.put("/users/{user_id}")
+async def update_user(user_id: int, user_data: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update user fields
+    if "username" in user_data:
+        # Check if username already exists for other users
+        existing_user = db.query(User).filter(User.username == user_data["username"], User.id != user_id).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        user.username = user_data["username"]
+    
+    if "email" in user_data:
+        # Check if email already exists for other users
+        existing_email = db.query(User).filter(User.email == user_data["email"], User.id != user_id).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
+        user.email = user_data["email"]
+    
+    if "role" in user_data:
+        user.role = user_data["role"]
+    
+    if "password" in user_data and user_data["password"]:
+        user.hashed_password = User.hash_password(user_data["password"])
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user.to_dict()
+
+@app.delete("/users/{user_id}")
+async def delete_user(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Prevent admin from deleting themselves
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db.delete(user)
+    db.commit()
+    
+    return {"message": "User deleted successfully"}
 
 @app.get("/users/{user_id}/monitors")
 async def get_user_monitors(
@@ -642,14 +764,14 @@ async def get_monitor_as_inmate_record(
             'race': row.race,
             'sex': row.sex,
             'cell_block': row.cell_block,
-            'arrest_date': row.arrest_date.isoformat() if row.arrest_date else None,
+            'arrest_date': format_date_only(row.arrest_date),
             'held_for_agency': row.held_for_agency,
             'mugshot': row.mugshot,
             'dob': row.dob,
             'hold_reasons': row.hold_reasons,
             'is_juvenile': row.is_juvenile,
             'release_date': row.release_date,
-            'in_custody_date': row.in_custody_date.isoformat() if row.in_custody_date else None,
+            'in_custody_date': format_date_only(row.in_custody_date),
             'jail_id': row.jail_id,
             'hide_record': row.hide_record
         }
@@ -665,6 +787,257 @@ async def get_monitor_as_inmate_record(
         "incarceration_records": incarceration_records,
         "total_records": len(incarceration_records)
     }
+
+# Monitor-Inmate Link Management Endpoints
+@app.get("/monitors/{monitor_id}/inmate-links")
+async def get_monitor_inmate_links(
+    monitor_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all manual inmate links for a monitor"""
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this monitor")
+    
+    links = db.query(MonitorInmateLink).filter(MonitorInmateLink.monitor_id == monitor_id).all()
+    return [link.to_dict() for link in links]
+
+@app.get("/monitors/{monitor_id}/inmate-links-detailed")
+async def get_monitor_inmate_links_detailed(
+    monitor_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all manual inmate links for a monitor with detailed inmate information"""
+    from sqlalchemy import text
+    
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this monitor")
+    
+    # Get links with detailed inmate information
+    query = text("""
+        SELECT 
+            ml.*,
+            i.name as inmate_name,
+            i.race as inmate_race,
+            i.sex as inmate_sex,
+            i.dob as inmate_dob,
+            i.mugshot as inmate_mugshot,
+            i.jail_id as inmate_jail_id,
+            i.arrest_date as latest_arrest_date,
+            i.release_date as latest_release_date,
+            i.in_custody_date as latest_custody_date,
+            i.hold_reasons as latest_charges,
+            CASE WHEN i.release_date IS NULL OR i.release_date = '' THEN 'in_custody' ELSE 'released' END as actual_status
+        FROM monitor_inmate_links ml
+        LEFT JOIN inmates i ON ml.inmate_id = i.idinmates
+        WHERE ml.monitor_id = :monitor_id
+        ORDER BY ml.created_at DESC
+    """)
+    
+    result = db.execute(query, {"monitor_id": monitor_id})
+    
+    enriched_links = []
+    for row in result:
+        link_data = {
+            'id': row.id,
+            'monitor_id': row.monitor_id,
+            'inmate_id': row.inmate_id,
+            'linked_by_user_id': row.linked_by_user_id,
+            'is_excluded': row.is_excluded,
+            'link_reason': row.link_reason,
+            'created_at': row.created_at.isoformat() if row.created_at else None,
+            'updated_at': row.updated_at.isoformat() if row.updated_at else None,
+            'inmate_details': {
+                'name': row.inmate_name,
+                'race': row.inmate_race,
+                'sex': row.inmate_sex,
+                'dob': row.inmate_dob,
+                'mugshot': row.inmate_mugshot,
+                'jail_id': row.inmate_jail_id,
+                'latest_arrest_date': format_date_only(row.latest_arrest_date),
+                'latest_release_date': row.latest_release_date,
+                'latest_custody_date': format_date_only(row.latest_custody_date),
+                'latest_charges': row.latest_charges,
+                'current_status': row.actual_status
+            } if row.inmate_name else None
+        }
+        enriched_links.append(link_data)
+    
+    return enriched_links
+
+@app.get("/monitors/{monitor_id}/inmate-history")
+async def get_monitor_inmate_history(
+    monitor_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all historical incarceration records for linked inmates"""
+    from sqlalchemy import text
+    
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this monitor")
+    
+    # Get all incarceration records for linked inmates
+    query = text("""
+        SELECT 
+            i.*,
+            CASE WHEN i.release_date IS NULL OR i.release_date = '' THEN 'in_custody' ELSE 'released' END as actual_status,
+            ml.is_excluded,
+            ml.link_reason
+        FROM inmates i
+        INNER JOIN monitor_inmate_links ml ON i.idinmates = ml.inmate_id
+        WHERE ml.monitor_id = :monitor_id
+        ORDER BY i.name, i.in_custody_date DESC
+    """)
+    
+    result = db.execute(query, {"monitor_id": monitor_id})
+    
+    history_records = []
+    for row in result:
+        record = {
+            'id': row.idinmates,
+            'name': row.name,
+            'race': row.race,
+            'sex': row.sex,
+            'cell_block': row.cell_block,
+            'arrest_date': format_date_only(row.arrest_date),
+            'held_for_agency': row.held_for_agency,
+            'mugshot': row.mugshot,
+            'dob': row.dob,
+            'hold_reasons': row.hold_reasons,
+            'is_juvenile': row.is_juvenile,
+            'release_date': row.release_date,
+            'in_custody_date': format_date_only(row.in_custody_date),
+            'jail_id': row.jail_id,
+            'hide_record': row.hide_record,
+            'actual_status': row.actual_status,
+            'is_excluded_link': row.is_excluded,
+            'link_reason': row.link_reason
+        }
+        history_records.append(record)
+    
+    return history_records
+
+@app.post("/monitors/{monitor_id}/inmate-links")
+async def create_monitor_inmate_link(
+    monitor_id: int,
+    link_data: MonitorInmateLinkCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a manual link between monitor and inmate record"""
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this monitor")
+    
+    # Check if inmate exists
+    inmate = db.query(Inmate).filter(Inmate.id == link_data.inmate_id).first()
+    if not inmate:
+        raise HTTPException(status_code=404, detail="Inmate record not found")
+    
+    # Check if link already exists
+    existing_link = db.query(MonitorInmateLink).filter(
+        MonitorInmateLink.monitor_id == monitor_id,
+        MonitorInmateLink.inmate_id == link_data.inmate_id
+    ).first()
+    
+    if existing_link:
+        raise HTTPException(status_code=400, detail="Link already exists")
+    
+    # Create new link
+    new_link = MonitorInmateLink(
+        monitor_id=monitor_id,
+        inmate_id=link_data.inmate_id,
+        linked_by_user_id=current_user.id,
+        is_excluded=link_data.is_excluded,
+        link_reason=link_data.link_reason
+    )
+    
+    db.add(new_link)
+    db.commit()
+    db.refresh(new_link)
+    
+    return new_link.to_dict()
+
+@app.put("/monitors/{monitor_id}/inmate-links/{link_id}")
+async def update_monitor_inmate_link(
+    monitor_id: int,
+    link_id: int,
+    link_data: MonitorInmateLinkUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a monitor-inmate link"""
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this monitor")
+    
+    link = db.query(MonitorInmateLink).filter(
+        MonitorInmateLink.id == link_id,
+        MonitorInmateLink.monitor_id == monitor_id
+    ).first()
+    
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+    
+    # Update link
+    link.is_excluded = link_data.is_excluded
+    link.link_reason = link_data.link_reason
+    link.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(link)
+    
+    return link.to_dict()
+
+@app.delete("/monitors/{monitor_id}/inmate-links/{link_id}")
+async def delete_monitor_inmate_link(
+    monitor_id: int,
+    link_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a monitor-inmate link"""
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this monitor")
+    
+    link = db.query(MonitorInmateLink).filter(
+        MonitorInmateLink.id == link_id,
+        MonitorInmateLink.monitor_id == monitor_id
+    ).first()
+    
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+    
+    db.delete(link)
+    db.commit()
+    
+    return {"message": "Link deleted successfully"}
+
+
 
 if __name__ == "__main__":
     import uvicorn

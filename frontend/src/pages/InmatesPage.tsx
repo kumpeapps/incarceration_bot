@@ -132,11 +132,23 @@ const InmatesPage: React.FC = () => {
     setPage(0);
   };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr || dateStr === '') return 'N/A';
+    const formatDate = (dateStr: string) => {
+    if (!dateStr) return 'Unknown';
+    
     try {
-      // Parse date as local date without timezone conversion
-      // This prevents 2025-08-08 from being converted to 2025-08-07 due to UTC/local timezone differences
+      // Handle YYYY-MM-DD format without timezone conversion
+      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const dateParts = dateStr.split('-');
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]);
+        const day = parseInt(dateParts[2]);
+        
+        // Create date with explicit timezone-neutral values
+        const date = new Date(year, month - 1, day);
+        return date.toLocaleDateString();
+      }
+      
+      // Handle other formats with time component
       let date;
       if (dateStr.includes('T')) {
         // Already has time component
