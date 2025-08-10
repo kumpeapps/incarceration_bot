@@ -1,13 +1,13 @@
 """Scrape Zuercher Portal for Inmate Records"""
 
-from datetime import datetime
+from datetime import datetime, date
 import zuercherportal_api as zuercherportal  # type: ignore
 from sqlalchemy.orm import Session
 from loguru import logger
 from zuercherportal_api import ZuercherportalResponse
 from models.Jail import Jail
 from models.Inmate import Inmate
-from scrapes.process import process_scrape_data
+from scrapes.process_optimized import process_scrape_data
 
 
 def scrape_zuercherportal(session: Session, jail: Jail):
@@ -31,9 +31,9 @@ def scrape_zuercherportal(session: Session, jail: Jail):
         except ValueError:
             arrest_date = None
         try:
-            release_date = datetime.strptime(inmate.release_date, "%Y-%m-%d").date()
+            release_date = datetime.strptime(inmate.release_date, "%Y-%m-%d").date().strftime("%Y-%m-%d")
         except ValueError:
-            release_date = None
+            release_date = ""
         new_inmate = Inmate(  # pylint: disable=unexpected-keyword-arg
             name=inmate.name,
             arrest_date=arrest_date,
@@ -46,6 +46,9 @@ def scrape_zuercherportal(session: Session, jail: Jail):
             cell_block=inmate.cell_block,
             mugshot=inmate.mugshot,
             is_juvenile=inmate.is_juvenile,
+            dob="Unknown",
+            in_custody_date=date.today(),
+            hide_record=False,
         )
         inmate_list.append(new_inmate)
     process_scrape_data(session, inmate_list, jail)

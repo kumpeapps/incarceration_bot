@@ -15,6 +15,11 @@ export interface Inmate {
   jail_id: string;
   hide_record: boolean;
   jail?: Jail;
+  // New fields for handling multiple records
+  actual_status?: 'in_custody' | 'released';
+  total_records?: number;
+  all_custody_dates?: string[];
+  first_booking_date?: string;
 }
 
 export interface Jail {
@@ -33,6 +38,7 @@ export interface Jail {
 export interface Monitor {
   id: number;
   name: string;
+  user_id?: number;
   arrest_date?: string;
   release_date?: string;
   arrest_reason?: string;
@@ -50,7 +56,9 @@ export interface User {
   username: string;
   email: string;
   role: 'admin' | 'user';
+  is_active: boolean;
   created_at: string;
+  updated_at: string;
   last_login?: string;
 }
 
@@ -72,6 +80,7 @@ export interface InmateSearchParams {
   sex?: string;
   is_juvenile?: boolean;
   in_custody?: boolean;
+  current_custody?: boolean;
   page?: number;
   limit?: number;
 }

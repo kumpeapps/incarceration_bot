@@ -1,6 +1,6 @@
 """Web Scraper for Crawford County AR Jail"""
 
-from datetime import datetime
+from datetime import datetime, date
 import requests  # type: ignore
 import bs4  # type: ignore
 
@@ -9,7 +9,7 @@ from loguru import logger
 from models.Jail import Jail
 from models.Inmate import Inmate
 
-from scrapes.process import process_scrape_data
+from scrapes.process_optimized import process_scrape_data
 from helpers.image_helper import image_url_to_base64
 
 URL = "https://inmates.crawfordcountysheriff.org"
@@ -130,12 +130,16 @@ def scrape_crawford_so_ar(session: Session, jail: Jail) -> None:
             name=name,
             race=race,
             sex=sex,
+            dob="Unknown",  # Crawford scraper doesn't provide DOB data
             arrest_date=arrest_date,
             jail_id=jail.jail_id,
             is_juvenile=False,
             held_for_agency=details["arresting_agency"],
             hold_reasons=details["charges"],
             mugshot=details["mugshot"],
+            release_date="",
+            in_custody_date=date.today(),
+            hide_record=False,
         )
         inmates.append(inmate)
     for inmate in inmates:

@@ -23,8 +23,11 @@ RUN apt-get remove -y gcc g++ make && \
 
 COPY . /app
 
+# Make startup script executable
+RUN chmod +x /app/startup.sh
+
 # Expose port for API
 EXPOSE 8000
 
-# Default command runs the scraper, but can be overridden for API
-CMD [ "python", "main.py" ]
+# Run the startup script which handles DB initialization and starts the API
+CMD ["/app/startup.sh"]

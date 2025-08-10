@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector, RootState } from '../store';
 import {
   Box,
   Button,
@@ -11,15 +11,14 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { RootState } from '../store';
 import { login, clearError } from '../store/authSlice';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const { isAuthenticated, loading, error } = useSelector(
+  const dispatch = useAppDispatch();
+  const { isAuthenticated, loading, error } = useAppSelector(
     (state: RootState) => state.auth
   );
 

@@ -112,6 +112,30 @@ class ApiService {
     await this.api.delete(`/monitors/${id}`);
   }
 
+  // Monitor assignment and linking (Admin functionality)
+  async assignMonitor(monitorId: number, userId: number): Promise<{ message: string }> {
+    const response = await this.api.put(`/monitors/${monitorId}/assign/${userId}`);
+    return response.data;
+  }
+
+  async linkMonitors(monitorId: number, linkedMonitorId: number, reason?: string): Promise<{ message: string }> {
+    const response = await this.api.post(`/monitors/${monitorId}/link`, {
+      linked_monitor_id: linkedMonitorId,
+      link_reason: reason,
+    });
+    return response.data;
+  }
+
+  async getMonitorInmateRecord(monitorId: number): Promise<any> {
+    const response = await this.api.get(`/monitors/${monitorId}/inmate-record`);
+    return response.data;
+  }
+
+  async getUserMonitors(userId: number): Promise<PaginatedResponse<Monitor>> {
+    const response = await this.api.get(`/users/${userId}/monitors`);
+    return response.data;
+  }
+
   // Jails
   async getJails(): Promise<Jail[]> {
     const response = await this.api.get('/jails');
@@ -134,7 +158,7 @@ class ApiService {
     return response.data;
   }
 
-  async createUser(user: Omit<User, 'id' | 'created_at' | 'last_login'> & { password: string }): Promise<User> {
+  async createUser(user: Omit<User, 'id' | 'created_at' | 'last_login' | 'updated_at'> & { password: string }): Promise<User> {
     const response = await this.api.post('/users', user);
     return response.data;
   }

@@ -11,7 +11,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Date,
-    TIMESTAMP
+    TIMESTAMP,
+    ForeignKey
 )
 from database_connect import Base
 from models.Inmate import Inmate
@@ -43,6 +44,7 @@ class Monitor(Base):
         "idmonitors", Integer, primary_key=True, autoincrement=True, nullable=False
     )
     name = Column(String(255), nullable=False)
+    user_id = Column(Integer, nullable=True)  # Owner of this monitor (no FK constraint for now)
     arrest_date = Column(Date, nullable=True)
     release_date = Column(String(255), nullable=True)
     arrest_reason = Column(String(255), nullable=True)
@@ -59,6 +61,7 @@ class Monitor(Base):
         return {
             "id": self.id,
             "name": self.name,
+            "user_id": self.user_id,
             "arrest_date": self.arrest_date,
             "release_date": self.release_date,
             "arrest_reason": self.arrest_reason,
@@ -91,7 +94,8 @@ class Monitor(Base):
 
             )
             if pushover_api_key == "":
-                raise ValueError("Pushover API Key not set")
+                logger.info("Pushover API Key not set - skipping notification")
+                return
             try:
                 _ = requests.post(
                     url="https://api.pushover.net/1/messages.json",

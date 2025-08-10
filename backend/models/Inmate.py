@@ -8,6 +8,7 @@ from sqlalchemy import (
     String,
     Boolean,
     Date,
+    DateTime,
     ForeignKey,
     UniqueConstraint,
     Text,
@@ -40,13 +41,10 @@ class Inmate(Base):  # type: ignore
             "name",
             "race",
             "dob",
-            "race",
-            "sex",
-            "hold_reasons",
-            "in_custody_date",
-            "release_date",
+            "sex", 
+            "arrest_date",
             "jail_id",
-            name="unique_inmate",
+            name="unique_inmate_new",
         ),
     )
 
@@ -61,10 +59,11 @@ class Inmate(Base):  # type: ignore
     held_for_agency = Column(String(255), nullable=True)
     mugshot = Column(Text(65535), nullable=True)
     dob = Column(String(255), nullable=False, default="Unknown")
-    hold_reasons = Column(Text(), nullable=False, default="")
+    hold_reasons = Column(String(1000), nullable=False, default="")  # Changed from Text to String with length
     is_juvenile = Column(Boolean, nullable=False, default=False)
     release_date = Column(String(255), nullable=False, default="")
     in_custody_date = Column(Date, nullable=False, default=date.today())
+    last_seen = Column(DateTime, nullable=True)
     jail_id = Column(String(255), ForeignKey("jails.jail_id"), nullable=False)
     hide_record = Column(Boolean, nullable=False, default=False)
     jail = relationship("Jail", back_populates="inmates")
@@ -80,13 +79,15 @@ class Inmate(Base):  # type: ignore
             "race": self.race,
             "sex": self.sex,
             "cell_block": self.cell_block,
-            "arrest_date": self.arrest_date,
+            "arrest_date": self.arrest_date.isoformat() if self.arrest_date else None,
             "held_for_agency": self.held_for_agency,
             "mugshot": self.mugshot,
             "dob": self.dob,
             "hold_reasons": self.hold_reasons,
             "is_juvenile": self.is_juvenile,
             "release_date": self.release_date,
-            "in_custody_date": self.in_custody_date,
+            "in_custody_date": self.in_custody_date.isoformat() if self.in_custody_date else None,
+            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
             "jail_id": self.jail_id,
+            "hide_record": self.hide_record,
         }

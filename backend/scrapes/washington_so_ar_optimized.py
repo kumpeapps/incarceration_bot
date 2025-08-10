@@ -1,6 +1,6 @@
 """Optimized Web Scraper for Washington County AR Jail"""
 
-from datetime import datetime
+from datetime import datetime, date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional
 import time
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 from models.Jail import Jail
 from models.Inmate import Inmate
-from scrapes.process import process_scrape_data
+from scrapes.process_optimized import process_scrape_data
 from helpers.image_helper import image_url_to_base64
 
 
@@ -338,6 +338,10 @@ def scrape_washington_so_ar_optimized(
             mugshot=details["mugshot"],
             held_for_agency=details["department"],
             hold_reasons=details["charges"],
+            dob="Unknown",
+            release_date="",
+            in_custody_date=date.today(),
+            hide_record=False,
         )
         inmates.append(inmate)
         successful_scrapes += 1

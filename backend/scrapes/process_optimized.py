@@ -8,7 +8,7 @@ from loguru import logger
 from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
-from helpers.insert_ignore import insert_ignore
+from helpers.insert_ignore import upsert_inmate
 
 
 def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail: Jail):
@@ -115,10 +115,11 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
                         monitor.send_message(inmate)
                         break
 
-        # Always try to insert the inmate record
+        # Always try to insert the inmate record with updated last_seen
+        inmate.last_seen = datetime.now()
         inmates_to_insert.append(inmate)
 
-    # Batch database operations
+    # Batch database operations - handle upserts for inmates
     try:
         # Add new monitors
         if new_monitors:
@@ -126,25 +127,13 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
             for monitor in new_monitors:
                 session.add(monitor)
 
-        # Insert inmates in batch
+        # Process inmates with bulk upsert for performance
         if inmates_to_insert:
-            logger.info(f"Inserting {len(inmates_to_insert)} inmates")
-            try:
-                for inmate in inmates_to_insert:
-                    insert_ignore(session, Inmate, inmate.to_dict())
-                    logger.debug(f"Inserted inmate: {inmate.name}")
-            except NotImplementedError:
-                logger.warning(
-                    "insert_ignore not implemented, falling back to bulk_save_objects for inmates batch insert"
-                )
-                try:
-                    session.bulk_save_objects(inmates_to_insert)
-                    logger.debug(
-                        f"Bulk inserted {len(inmates_to_insert)} inmates with bulk_save_objects"
-                    )
-                except IntegrityError as error:
-                    logger.error(f"Bulk insert failed: {error}")
-                    session.rollback()
+            logger.info(f"Processing {len(inmates_to_insert)} inmates with bulk upsert")
+            for inmate in inmates_to_insert:
+                # Use upsert to handle duplicates and update last_seen
+                upsert_inmate(session, inmate.to_dict())
+                logger.debug(f"Upserted inmate: {inmate.name}")
 
         # Commit all changes at once
         session.commit()
@@ -158,8 +147,10 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
     # Check for released inmates (those no longer in jail)
     try:
         check_for_released_inmates(session, inmates, jail)
+        # Also check for released inmates in the main inmates table
+        update_release_dates_for_missing_inmates(session, inmates, jail)
         session.commit()
-        logger.debug("Checked for released inmates")
+        logger.debug("Checked for released inmates and updated release dates")
     except Exception as error:
         logger.error(f"Failed to check for released inmates: {error}")
         session.rollback()
@@ -272,6 +263,80 @@ def check_for_released_inmates(
         )
     else:
         logger.debug(f"No releases detected in {jail.jail_name}")
+
+
+def update_release_dates_for_missing_inmates(
+    session: Session, current_inmates: List[Inmate], jail: Jail
+):
+    """
+    Update release_date for inmates who are no longer present in the current scrape
+    and have a blank release_date, indicating they have been released.
+
+    Args:
+        session (Session): SQLAlchemy session for database operations.
+        current_inmates (List[Inmate]): List of currently scraped inmates.
+        jail (Jail): Jail object containing jail details.
+    """
+    logger.debug(f"Checking for inmates to update release dates in {jail.jail_name}")
+
+    # Get all inmates for this jail that don't have a release date and last_seen is not today
+    today = date.today()
+    today_start_dt = datetime.combine(today, datetime.min.time())  # Start of today as datetime
+    
+    inmates_to_check = (
+        session.query(Inmate)
+        .filter(
+            Inmate.jail_id == jail.jail_id,
+            Inmate.release_date.in_(["", None]),  # Blank or null release date
+            Inmate.last_seen < today_start_dt  # last_seen is before today
+        )
+        .all()
+    )
+
+    if not inmates_to_check:
+        logger.debug(f"No inmates need release date updates in {jail.jail_name}")
+        return
+
+    logger.info(f"Found {len(inmates_to_check)} inmates to check for release date updates in {jail.jail_name}")
+
+    # Create a set of current inmate identifiers (name + arrest_date) for fast lookup
+    current_inmate_identifiers = {
+        (str(inmate.name).strip().lower(), inmate.arrest_date) for inmate in current_inmates
+    }
+    
+    logger.debug(f"Current scrape has {len(current_inmate_identifiers)} unique inmate records")
+    logger.debug(f"Checking {len(inmates_to_check)} inmates with old last_seen dates")
+
+    updated_count = 0
+
+    for inmate in inmates_to_check:
+        inmate_name = str(inmate.name).strip().lower()
+        inmate_identifier = (inmate_name, inmate.arrest_date)
+
+        # Check if this specific incarceration (name + arrest_date) is still in current inmates list
+        if inmate_identifier not in current_inmate_identifiers:
+            # This specific incarceration not found in current scrape - likely released
+            # Use their last_seen date as the release date
+            if inmate.last_seen:
+                # Extract just the date part from the datetime object
+                release_date_str = inmate.last_seen.date().isoformat()
+            else:
+                # Fallback to today's date if no last_seen
+                release_date_str = today.isoformat()
+            
+            logger.info(
+                f"Setting release date for {inmate.name} (arrested: {inmate.arrest_date}) to {release_date_str} (last seen: {inmate.last_seen})"
+            )
+            
+            inmate.release_date = release_date_str
+            updated_count += 1
+        else:
+            logger.debug(f"Inmate {inmate.name} (arrested: {inmate.arrest_date}) still in current roster, skipping release date update")
+
+    if updated_count > 0:
+        logger.info(f"Updated release dates for {updated_count} inmates in {jail.jail_name}")
+    else:
+        logger.debug(f"No release date updates needed in {jail.jail_name}")
 
 
 # Backward compatibility

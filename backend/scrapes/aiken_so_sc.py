@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 from models.Jail import Jail
 from models.Inmate import Inmate
-from scrapes.process import process_scrape_data
+from scrapes.process_optimized import process_scrape_data
 from helpers.image_helper import image_url_to_base64
 
 # Base URLs

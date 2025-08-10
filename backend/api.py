@@ -16,7 +16,9 @@ from passlib.context import CryptContext
 # Import existing models
 from models.Inmate import Inmate
 from models.Monitor import Monitor
+from models.MonitorLink import MonitorLink
 from models.Jail import Jail
+from models.User import User
 import database_connect as db
 
 app = FastAPI(title="Incarceration Bot API", version="1.0.0")
@@ -32,7 +34,6 @@ app.add_middleware(
 
 # Security
 security = HTTPBearer()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -92,6 +93,10 @@ class MonitorCreate(BaseModel):
     notify_method: str = "pushover"
     enable_notifications: int = 1
 
+class MonitorLinkCreate(BaseModel):
+    linked_monitor_id: int
+    link_reason: Optional[str] = None
+
 class PaginatedResponse(BaseModel):
     items: List[dict]
     total: int
@@ -108,26 +113,13 @@ class DashboardStats(BaseModel):
     recent_arrests: int
     recent_releases: int
 
-# Mock user store (in production, use a proper database)
-fake_users_db = {
-    "admin": {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "hashed_password": pwd_context.hash("admin123"),
-        "role": "admin"
-    },
-    "user": {
-        "id": 2,
-        "username": "user",
-        "email": "user@example.com", 
-        "hashed_password": pwd_context.hash("user123"),
-        "role": "user"
-    }
-}
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+# Database dependency
+def get_db():
+    session = db.new_session()
+    try:
+        yield session
+    finally:
+        session.close()
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -136,63 +128,45 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        user = fake_users_db.get(username)
+        user = db.query(User).filter(User.username == username).first()
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
         return user
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
-# Database dependency
-def get_db():
-    session = db.get_session()
-    try:
-        yield session
-    finally:
-        session.close()
-
 # Authentication endpoints
 @app.post("/auth/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest):
-    user = fake_users_db.get(login_data.username)
-    if not user or not verify_password(login_data.password, user["hashed_password"]):
+async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == login_data.username).first()
+    if not user or not user.verify_password(login_data.password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
-    access_token = create_access_token(data={"sub": user["username"]})
+    access_token = create_access_token(data={"sub": user.username})
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "email": user["email"],
-            "role": user["role"]
-        }
+        "user": user.to_dict()
     }
 
 @app.post("/auth/logout")
-async def logout(current_user: dict = Depends(get_current_user)):
+async def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Successfully logged out"}
 
 @app.get("/auth/me")
-async def get_current_user_info(current_user: dict = Depends(get_current_user)):
-    return {
-        "id": current_user["id"],
-        "username": current_user["username"],
-        "email": current_user["email"],
-        "role": current_user["role"]
-    }
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    return current_user.to_dict()
 
 # Dashboard endpoints
 @app.get("/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     total_inmates = db.query(Inmate).count()
@@ -222,21 +196,120 @@ async def get_inmates(
     limit: int = 50,
     name: Optional[str] = None,
     jail_id: Optional[str] = None,
+    current_custody: Optional[bool] = None,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Inmate)
+    print(f"🔥 ENTRY POINT: name='{name}', jail_id='{jail_id}', current_custody={current_custody}")
+    from sqlalchemy import text
+    
+    # Allow showing current custody records without requiring other filters
+    # But require at least one search filter for historical data
+    print(f"🚨 DEBUG INMATES ENDPOINT: name={name}, jail_id={jail_id}, current_custody={current_custody}")
+    print(f"🚨 DEBUG: any([name, jail_id]) = {any([name, jail_id])}")
+    
+    # If no search filters and not current custody, return empty
+    if not any([name, jail_id]) and current_custody is not True:
+        print("🚨 DEBUG: Returning empty response - no search filters and not current custody")
+        return PaginatedResponse(
+            items=[],
+            total=0,
+            page=page,
+            limit=limit,
+            pages=0
+        )
+    
+    # Simple query to get all inmates - no grouping needed since data is now clean
+    base_query = """
+        SELECT * FROM inmates
+    """
+    
+    conditions = []
+    params = {}
     
     if name:
-        query = query.filter(Inmate.name.ilike(f"%{name}%"))
+        conditions.append("name LIKE :name")
+        params['name'] = f"%{name}%"
     if jail_id:
-        query = query.filter(Inmate.jail_id == jail_id)
+        conditions.append("jail_id = :jail_id")
+        params['jail_id'] = jail_id
+    if current_custody is True:
+        conditions.append("DATE(in_custody_date) = CURDATE()")
+    elif current_custody is False:
+        conditions.append("DATE(in_custody_date) < CURDATE()")
     
-    total = query.count()
-    inmates = query.offset((page - 1) * limit).limit(limit).all()
+    if conditions:
+        base_query += " WHERE " + " AND ".join(conditions)
+    
+    base_query += " ORDER BY in_custody_date DESC"
+    
+    # Get total count
+    count_query = f"SELECT COUNT(*) as total FROM ({base_query}) as counted"
+    total_result = db.execute(text(count_query), params)
+    total_row = total_result.fetchone()
+    total = total_row.total if total_row else 0
+    
+    # Get paginated results
+    paginated_query = base_query + f" LIMIT {limit} OFFSET {(page - 1) * limit}"
+    result = db.execute(text(paginated_query), params)
+    
+    enhanced_inmates = []
+    for row in result:
+        # Convert row to dict
+        inmate_dict = {
+            'id': row.idinmates,
+            'name': row.name,
+            'race': row.race,
+            'sex': row.sex,
+            'cell_block': row.cell_block,
+            'arrest_date': row.arrest_date.isoformat() if row.arrest_date else None,
+            'held_for_agency': row.held_for_agency,
+            'mugshot': row.mugshot,
+            'dob': row.dob,
+            'hold_reasons': row.hold_reasons,
+            'is_juvenile': row.is_juvenile,
+            'release_date': row.release_date,
+            'in_custody_date': row.in_custody_date.isoformat() if row.in_custody_date else None,
+            'jail_id': row.jail_id,
+            'hide_record': row.hide_record
+        }
+        
+        # Get enhanced info for this person
+        enhancement_query = text("""
+            SELECT COUNT(*) as total_records,
+                   MIN(in_custody_date) as first_booking,
+                   MAX(in_custody_date) as latest_booking,
+                   GROUP_CONCAT(DISTINCT release_date) as all_releases
+            FROM inmates 
+            WHERE name = :name AND dob = :dob AND jail_id = :jail_id
+        """)
+        
+        enhancement_result = db.execute(enhancement_query, {
+            'name': row.name,
+            'dob': row.dob,
+            'jail_id': row.jail_id
+        })
+        enhancement_data = enhancement_result.fetchone()
+        
+        # Determine actual status with null checks
+        if enhancement_data:
+            has_release = enhancement_data.all_releases and enhancement_data.all_releases.strip()
+            actual_status = 'released' if has_release else 'in_custody'
+            
+            # Add enhanced fields
+            inmate_dict['actual_status'] = actual_status
+            inmate_dict['total_records'] = enhancement_data.total_records
+            inmate_dict['first_booking_date'] = enhancement_data.first_booking.isoformat() if enhancement_data.first_booking else None
+        else:
+            # Fallback if query fails
+            inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
+            inmate_dict['total_records'] = 1
+            inmate_dict['first_booking_date'] = row.in_custody_date.isoformat() if row.in_custody_date else None
+        
+        enhanced_inmates.append(inmate_dict)
     
     return PaginatedResponse(
-        items=[inmate.to_dict() for inmate in inmates],
+        items=enhanced_inmates,
         total=total,
         page=page,
         limit=limit,
@@ -249,20 +322,107 @@ async def get_inmate(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    inmate = db.query(Inmate).filter(Inmate.id == inmate_id).first()
-    if not inmate:
+    from sqlalchemy import text
+    
+    # Get the specific inmate
+    inmate_query = text("SELECT * FROM inmates WHERE idinmates = :inmate_id")
+    result = db.execute(inmate_query, {'inmate_id': inmate_id})
+    row = result.fetchone()
+    
+    if not row:
         raise HTTPException(status_code=404, detail="Inmate not found")
-    return inmate.to_dict()
+    
+    # Convert to dict
+    inmate_dict = {
+        'id': row.idinmates,
+        'name': row.name,
+        'race': row.race,
+        'sex': row.sex,
+        'cell_block': row.cell_block,
+        'arrest_date': row.arrest_date.isoformat() if row.arrest_date else None,
+        'held_for_agency': row.held_for_agency,
+        'mugshot': row.mugshot,
+        'dob': row.dob,
+        'hold_reasons': row.hold_reasons,
+        'is_juvenile': row.is_juvenile,
+        'release_date': row.release_date,
+        'in_custody_date': row.in_custody_date.isoformat() if row.in_custody_date else None,
+        'jail_id': row.jail_id,
+        'hide_record': row.hide_record
+    }
+    
+    # Get enhanced custody information
+    enhancement_query = text("""
+        SELECT COUNT(*) as total_records,
+               MIN(in_custody_date) as first_booking,
+               MAX(in_custody_date) as latest_booking,
+               GROUP_CONCAT(DISTINCT in_custody_date ORDER BY in_custody_date) as all_custody_dates,
+               GROUP_CONCAT(DISTINCT release_date) as all_releases,
+               CASE 
+                   WHEN MAX(in_custody_date) < CURDATE() THEN 'released'
+                   WHEN SUM(CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END) > 0 THEN 'in_custody'
+                   ELSE 'released'
+               END as computed_status
+        FROM inmates 
+        WHERE name = :name AND dob = :dob AND jail_id = :jail_id
+    """)
+    
+    enhancement_result = db.execute(enhancement_query, {
+        'name': row.name,
+        'dob': row.dob,
+        'jail_id': row.jail_id
+    })
+    enhancement_data = enhancement_result.fetchone()
+    
+    if enhancement_data:
+        # Use the computed status from the SQL query which considers date logic
+        inmate_dict['actual_status'] = enhancement_data.computed_status
+        inmate_dict['total_records'] = enhancement_data.total_records
+        inmate_dict['first_booking_date'] = enhancement_data.first_booking.isoformat() if enhancement_data.first_booking else None
+        
+        # Update in_custody_date to show the latest custody date
+        if enhancement_data.latest_booking:
+            inmate_dict['in_custody_date'] = enhancement_data.latest_booking.isoformat()
+        
+        # Parse custody dates
+        if enhancement_data.all_custody_dates:
+            custody_dates = enhancement_data.all_custody_dates.split(',')
+            inmate_dict['all_custody_dates'] = custody_dates
+        else:
+            inmate_dict['all_custody_dates'] = []
+    else:
+        # Fallback with date-based logic
+        from datetime import date
+        today = date.today()
+        custody_date = row.in_custody_date.date() if row.in_custody_date else None
+        
+        if custody_date and custody_date < today:
+            inmate_dict['actual_status'] = 'released'
+        elif row.release_date and row.release_date.strip():
+            inmate_dict['actual_status'] = 'released'
+        else:
+            inmate_dict['actual_status'] = 'in_custody'
+            
+        inmate_dict['total_records'] = 1
+        inmate_dict['first_booking_date'] = row.in_custody_date.isoformat() if row.in_custody_date else None
+        inmate_dict['all_custody_dates'] = [row.in_custody_date.isoformat()] if row.in_custody_date else []
+    
+    return inmate_dict
 
 # Monitors endpoints
 @app.get("/monitors")
 async def get_monitors(
     page: int = 1,
     limit: int = 50,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Monitor)
+    # Admin sees all monitors, users see only their own
+    if current_user.role == "admin":
+        query = db.query(Monitor)
+    else:
+        query = db.query(Monitor).filter(Monitor.user_id == current_user.id)
+    
     total = query.count()
     monitors = query.offset((page - 1) * limit).limit(limit).all()
     
@@ -277,14 +437,15 @@ async def get_monitors(
 @app.post("/monitors")
 async def create_monitor(
     monitor_data: MonitorCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     monitor = Monitor(
         name=monitor_data.name,
         notify_address=monitor_data.notify_address,
         notify_method=monitor_data.notify_method,
-        enable_notifications=monitor_data.enable_notifications
+        enable_notifications=monitor_data.enable_notifications,
+        user_id=current_user.id
     )
     db.add(monitor)
     db.commit()
@@ -295,13 +456,18 @@ async def create_monitor(
 async def update_monitor(
     monitor_id: int,
     monitor_data: MonitorCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
     
+    # Users can only edit their own monitors, admins can edit any
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this monitor")
+    
+    # Update monitor fields
     monitor.name = monitor_data.name
     monitor.notify_address = monitor_data.notify_address
     monitor.notify_method = monitor_data.notify_method
@@ -314,12 +480,16 @@ async def update_monitor(
 @app.delete("/monitors/{monitor_id}")
 async def delete_monitor(
     monitor_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    # Users can only delete their own monitors, admins can delete any
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this monitor")
     
     db.delete(monitor)
     db.commit()
@@ -337,19 +507,164 @@ async def get_jails(
 
 # Users endpoints (admin only)
 @app.get("/users")
-async def get_users(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
+async def get_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    return [
-        {
-            "id": user["id"],
-            "username": user["username"], 
-            "email": user["email"],
-            "role": user["role"]
+    users = db.query(User).all()
+    return [user.to_dict() for user in users]
+
+@app.get("/users/{user_id}/monitors")
+async def get_user_monitors(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    monitors = db.query(Monitor).filter(Monitor.user_id == user_id).all()
+    return [monitor.to_dict() for monitor in monitors]
+
+@app.put("/monitors/{monitor_id}/assign/{user_id}")
+async def assign_monitor_to_user(
+    monitor_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    monitor.user_id = user_id
+    db.commit()
+    return {"message": f"Monitor assigned to user {user.username}"}
+
+# Monitor linking endpoints
+@app.post("/monitors/{monitor_id}/link")
+async def link_monitor(
+    monitor_id: int,
+    link_data: MonitorLinkCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Check if primary monitor exists and user has access
+    primary_monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not primary_monitor:
+        raise HTTPException(status_code=404, detail="Primary monitor not found")
+    
+    if current_user.role != "admin" and primary_monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to link this monitor")
+    
+    # Check if linked monitor exists
+    linked_monitor = db.query(Monitor).filter(Monitor.id == link_data.linked_monitor_id).first()
+    if not linked_monitor:
+        raise HTTPException(status_code=404, detail="Linked monitor not found")
+    
+    # Create the link
+    link = MonitorLink(
+        primary_monitor_id=monitor_id,
+        linked_monitor_id=link_data.linked_monitor_id,
+        linked_by_user_id=current_user.id,
+        link_reason=link_data.link_reason
+    )
+    db.add(link)
+    db.commit()
+    return {"message": "Monitors linked successfully"}
+
+@app.get("/monitors/{monitor_id}/inmate-record")
+async def get_monitor_as_inmate_record(
+    monitor_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from sqlalchemy import text, or_
+    
+    # Get the primary monitor
+    monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if current_user.role != "admin" and monitor.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this monitor")
+    
+    # Get all linked monitors (both directions)
+    linked_monitor_ids = []
+    
+    # Get monitors linked TO this one
+    primary_links = db.query(MonitorLink).filter(MonitorLink.primary_monitor_id == monitor_id).all()
+    linked_monitor_ids.extend([link.linked_monitor_id for link in primary_links])
+    
+    # Get monitors where this one is linked FROM
+    secondary_links = db.query(MonitorLink).filter(MonitorLink.linked_monitor_id == monitor_id).all()
+    linked_monitor_ids.extend([link.primary_monitor_id for link in secondary_links])
+    
+    # Include the original monitor
+    all_monitor_ids = [monitor_id] + linked_monitor_ids
+    
+    # Get all monitors
+    all_monitors = db.query(Monitor).filter(Monitor.id.in_(all_monitor_ids)).all()
+    
+    # Get all names to search for
+    all_names = [m.name for m in all_monitors]
+    
+    # Search for incarceration records for all these names
+    inmate_query = """
+        SELECT i1.* FROM inmates i1
+        INNER JOIN (
+            SELECT name, dob, jail_id, MAX(in_custody_date) as latest_date
+            FROM inmates
+            WHERE name IN :names
+            GROUP BY name, dob, jail_id
+        ) i2 ON i1.name = i2.name 
+               AND i1.dob = i2.dob 
+               AND i1.jail_id = i2.jail_id 
+               AND i1.in_custody_date = i2.latest_date
+        ORDER BY i1.in_custody_date DESC
+    """
+    
+    result = db.execute(text(inmate_query), {"names": tuple(all_names) if all_names else ("",)})
+    
+    incarceration_records = []
+    for row in result:
+        # Convert row to dict
+        record = {
+            'id': row.idinmates,
+            'name': row.name,
+            'race': row.race,
+            'sex': row.sex,
+            'cell_block': row.cell_block,
+            'arrest_date': row.arrest_date.isoformat() if row.arrest_date else None,
+            'held_for_agency': row.held_for_agency,
+            'mugshot': row.mugshot,
+            'dob': row.dob,
+            'hold_reasons': row.hold_reasons,
+            'is_juvenile': row.is_juvenile,
+            'release_date': row.release_date,
+            'in_custody_date': row.in_custody_date.isoformat() if row.in_custody_date else None,
+            'jail_id': row.jail_id,
+            'hide_record': row.hide_record
         }
-        for user in fake_users_db.values()
-    ]
+        
+        # Determine status
+        record['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
+        incarceration_records.append(record)
+    
+    return {
+        "primary_monitor": monitor.to_dict(),
+        "linked_monitors": [m.to_dict() for m in all_monitors if m.id != monitor_id],
+        "all_names": all_names,
+        "incarceration_records": incarceration_records,
+        "total_records": len(incarceration_records)
+    }
 
 if __name__ == "__main__":
     import uvicorn

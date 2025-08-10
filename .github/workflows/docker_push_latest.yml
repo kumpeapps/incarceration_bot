@@ -1,4 +1,4 @@
-name: Push Docker Image to Docker Hub (Latest)
+name: Push Docker Images to Docker Hub (Latest)
 
 on:
   push:
@@ -14,8 +14,23 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-      - name: Build and Deploy Image
+      
+      - name: Build and Push Backend Scraper Image
         run: |
             docker buildx build --push \
                 --tag justinkumpe/incarceration_bot:latest \
-                --platform linux/amd64,linux/arm/v7,linux/arm64 ./backend
+                --platform linux/amd64,linux/arm/v7,linux/arm64 \
+                --file ./backend/Dockerfile ./backend
+      
+      - name: Build and Push Backend API Image
+        run: |
+            docker buildx build --push \
+                --tag justinkumpe/incarceration_bot_api:latest \
+                --platform linux/amd64,linux/arm/v7,linux/arm64 \
+                --file ./backend/Dockerfile.api ./backend
+      
+      - name: Build and Push Frontend Image
+        run: |
+            docker buildx build --push \
+                --tag justinkumpe/incarceration_bot_frontend:latest \
+                --platform linux/amd64,linux/arm/v7,linux/arm64 ./frontend

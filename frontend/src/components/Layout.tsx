@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useAppSelector, useAppDispatch, RootState } from '../store';
 import {
   AppBar,
   Box,
@@ -27,7 +27,6 @@ import {
   Logout,
   AccountCircle,
 } from '@mui/icons-material';
-import { RootState } from '../store';
 import { logout } from '../store/authSlice';
 
 const drawerWidth = 240;
@@ -44,8 +43,8 @@ const Layout: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useDispatch();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state: RootState) => state.auth);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);

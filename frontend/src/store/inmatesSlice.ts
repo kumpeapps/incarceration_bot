@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { Inmate, InmateSearchParams, PaginatedResponse } from '../types';
+import { Inmate, InmateSearchParams } from '../types';
 import { apiService } from '../services/api';
 
 interface InmatesState {
