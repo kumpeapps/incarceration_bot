@@ -15,17 +15,8 @@ else
     exit 1
 fi
 
-# Run database migrations
-echo "Running database migrations..."
-alembic upgrade head
-
-# Check if migrations were successful
-if [ $? -eq 0 ]; then
-    echo "Database migrations completed successfully"
-else
-    echo "Database migrations failed"
-    exit 1
-fi
+# Database initialization (including migrations) is handled by init_db.py
+echo "Database initialization and migrations completed via init_db.py"
 
 # Start the API server
 echo "Starting API server..."

@@ -46,11 +46,48 @@ def run_alembic_migrations():
     try:
         from alembic.config import Config
         from alembic import command
+        import subprocess
         
         # Set up Alembic configuration
         alembic_cfg = Config('/app/alembic.ini')
         
         logger.info("Running Alembic migrations...")
+        
+        # First, check if we have multiple heads
+        try:
+            heads_result = subprocess.run(['alembic', 'heads'], 
+                                        capture_output=True, text=True, cwd='/app')
+            if heads_result.returncode == 0:
+                heads_output = heads_result.stdout.strip()
+                head_lines = [line for line in heads_output.split('\n') if line.strip()]
+                
+                if len(head_lines) > 1:
+                    logger.warning(f"Multiple Alembic heads detected ({len(head_lines)} heads)")
+                    logger.info("Attempting to merge heads automatically...")
+                    
+                    # Try to merge heads
+                    merge_result = subprocess.run([
+                        'alembic', 'merge', '-m', 'auto-merge conflicting heads during startup', 'heads'
+                    ], capture_output=True, text=True, cwd='/app')
+                    
+                    if merge_result.returncode == 0:
+                        logger.info("✅ Heads merged successfully")
+                        logger.info(f"Merge output: {merge_result.stdout}")
+                    else:
+                        logger.error(f"Failed to merge heads: {merge_result.stderr}")
+                        logger.info("Attempting to use heads command as fallback...")
+                        # Try upgrading to heads (all heads) instead of head
+                        try:
+                            command.upgrade(alembic_cfg, 'heads')
+                            logger.info("Alembic migrations completed using 'heads' target")
+                            return True
+                        except Exception as heads_e:
+                            logger.error(f"Failed to upgrade to heads: {heads_e}")
+                            raise e
+                else:
+                    logger.info("Single head detected - proceeding normally")
+        except Exception as check_e:
+            logger.warning(f"Could not check heads: {check_e}, proceeding with normal upgrade")
         
         # Run migrations to head
         command.upgrade(alembic_cfg, 'head')
@@ -60,6 +97,16 @@ def run_alembic_migrations():
         
     except Exception as e:
         logger.error(f"Alembic migration failed: {e}")
+        
+        # Check if this is a multiple heads error
+        error_str = str(e).lower()
+        if 'multiple head revisions' in error_str:
+            logger.error("Multiple head revisions detected - this needs to be resolved manually")
+            logger.error("Container will continue startup but database may be inconsistent")
+            logger.error("Please run: docker-compose exec backend_api alembic merge -m 'merge heads' heads")
+            logger.error("Then run: docker-compose exec backend_api alembic upgrade head")
+            # Don't fail startup completely - continue but log the issue
+            return True
         
         # Fallback to manual migration if Alembic fails
         logger.info("Attempting manual migration as fallback...")

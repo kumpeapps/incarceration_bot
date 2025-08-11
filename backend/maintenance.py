@@ -252,6 +252,121 @@ def cleanup_duplicates_locked(session):
         logger.error(f"Failed to run locked cleanup: {e}")
         return False
 
+def check_alembic_heads():
+    """Check Alembic migration heads and provide info"""
+    try:
+        import subprocess
+        import os
+        
+        logger.info("Checking Alembic migration status...")
+        
+        # Get current heads
+        result = subprocess.run(['alembic', 'heads'], 
+                              capture_output=True, text=True, cwd=os.getcwd())
+        
+        if result.returncode == 0:
+            heads = result.stdout.strip()
+            print("Current Alembic heads:")
+            print(heads)
+            
+            # Count heads
+            head_lines = [line for line in heads.split('\n') if line.strip()]
+            head_count = len(head_lines)
+            
+            if head_count > 1:
+                print(f"\n⚠️  WARNING: {head_count} heads found (should be 1)")
+                print("This indicates conflicting migration branches.")
+                print("\nTo fix:")
+                print("1. Run: docker-compose exec backend_api python maintenance.py merge-heads")
+                print("2. Or manually: docker-compose exec backend_api alembic merge -m 'merge heads' heads")
+                return False
+            else:
+                print("✅ Single head found - migrations are clean")
+                return True
+        else:
+            logger.error(f"Failed to check heads: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Failed to check Alembic heads: {e}")
+        return False
+
+def merge_alembic_heads():
+    """Automatically merge multiple Alembic heads"""
+    try:
+        import subprocess
+        import os
+        
+        logger.info("Merging Alembic heads...")
+        
+        # First, check if we actually have multiple heads
+        result = subprocess.run(['alembic', 'heads'], 
+                              capture_output=True, text=True, cwd=os.getcwd())
+        
+        if result.returncode != 0:
+            logger.error(f"Failed to check heads: {result.stderr}")
+            return False
+            
+        heads = result.stdout.strip()
+        head_lines = [line for line in heads.split('\n') if line.strip()]
+        
+        if len(head_lines) <= 1:
+            logger.info("Only one head found - no merge needed")
+            return True
+            
+        logger.info(f"Found {len(head_lines)} heads - merging...")
+        
+        # Create merge migration
+        merge_result = subprocess.run([
+            'alembic', 'merge', '-m', 'merge conflicting heads', 'heads'
+        ], capture_output=True, text=True, cwd=os.getcwd())
+        
+        if merge_result.returncode == 0:
+            logger.info("✅ Heads merged successfully")
+            print("Merge migration created:")
+            print(merge_result.stdout)
+            
+            # Now upgrade to the new merged head
+            upgrade_result = subprocess.run(['alembic', 'upgrade', 'head'],
+                                          capture_output=True, text=True, cwd=os.getcwd())
+            
+            if upgrade_result.returncode == 0:
+                logger.info("✅ Database upgraded to merged head")
+                return True
+            else:
+                logger.error(f"Failed to upgrade after merge: {upgrade_result.stderr}")
+                return False
+        else:
+            logger.error(f"Failed to merge heads: {merge_result.stderr}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Failed to merge Alembic heads: {e}")
+        return False
+
+def show_migration_history():
+    """Show current migration history"""
+    try:
+        import subprocess
+        import os
+        
+        logger.info("Showing migration history...")
+        
+        result = subprocess.run(['alembic', 'history'], 
+                              capture_output=True, text=True, cwd=os.getcwd())
+        
+        if result.returncode == 0:
+            print("Migration history:")
+            print(result.stdout)
+            return True
+        else:
+            logger.error(f"Failed to show history: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Failed to show migration history: {e}")
+        return False
+
 def main():
     parser = argparse.ArgumentParser(description='Incarceration Bot Maintenance Commands')
     parser.add_argument('command', choices=[
@@ -261,7 +376,10 @@ def main():
         'quick-cleanup',
         'lock-tables',
         'unlock-tables',
-        'maintenance-with-lock'
+        'maintenance-with-lock',
+        'check-heads',
+        'merge-heads',
+        'migration-history'
     ], help='Maintenance command to run')
     
     parser.add_argument('--operation', 
@@ -306,6 +424,12 @@ def main():
             success = False
         else:
             success = maintenance_with_lock(args.operation)
+    elif args.command == 'check-heads':
+        success = check_alembic_heads()
+    elif args.command == 'merge-heads':
+        success = merge_alembic_heads()
+    elif args.command == 'migration-history':
+        success = show_migration_history()
     else:
         logger.error(f"Unknown command: {args.command}")
         success = False
