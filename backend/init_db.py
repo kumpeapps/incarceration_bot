@@ -150,39 +150,9 @@ def initialize_database():
         session.close()
         logger.info("Database schema initialization completed")
         
-        # Skip Alembic migrations for now to debug the issue
-        logger.info("Skipping Alembic migrations temporarily for debugging")
-        
-        # Instead, add the last_seen column manually if needed
-        session = new_session()
-        try:
-            from sqlalchemy import inspect, text
-            inspector = inspect(session.bind)
-            
-            # Check if inmates table exists
-            tables = inspector.get_table_names()
-            logger.info(f"Tables found: {tables}")
-            
-            if 'inmates' in tables:
-                columns = inspector.get_columns('inmates')
-                column_names = [col['name'] for col in columns]
-                logger.info(f"Inmates table columns: {column_names}")
-                
-                if 'last_seen' not in column_names:
-                    logger.info("Adding last_seen column manually")
-                    session.execute(text('ALTER TABLE inmates ADD COLUMN last_seen DATETIME NULL'))
-                    session.commit()
-                    logger.info("last_seen column added successfully")
-                else:
-                    logger.info("last_seen column already exists")
-            else:
-                logger.warning("inmates table not found after schema creation")
-                
-        except Exception as e:
-            logger.error(f"Manual column addition failed: {e}")
-            session.rollback()
-        finally:
-            session.close()
+        # Run Alembic migrations
+        if not run_alembic_migrations():
+            logger.warning("Alembic migrations failed, but continuing with startup")
         
         logger.info("Database initialization completed successfully")
         return True
