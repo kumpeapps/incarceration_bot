@@ -13,8 +13,20 @@ export const getConfig = () => {
   const windowWithConfig = window as WindowWithConfig;
   
   // Use runtime config if available, fallback to environment variables for development
-  return {
+  const config = {
     API_BASE_URL: windowWithConfig.runtimeConfig?.API_BASE_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
     APP_TITLE: windowWithConfig.runtimeConfig?.APP_TITLE || import.meta.env.VITE_APP_TITLE || 'Incarceration Bot Dashboard'
   };
+  
+  // Debug logging in development
+  if (import.meta.env.DEV) {
+    console.log('Runtime config:', windowWithConfig.runtimeConfig);
+    console.log('Environment variables:', {
+      VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+      VITE_APP_TITLE: import.meta.env.VITE_APP_TITLE
+    });
+    console.log('Final config:', config);
+  }
+  
+  return config;
 };

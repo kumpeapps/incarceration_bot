@@ -27,15 +27,9 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Create a script to generate runtime config
-RUN echo '#!/bin/sh' > /docker-entrypoint.d/10-generate-config.sh && \
-    echo 'cat << EOF > /usr/share/nginx/html/config.js' >> /docker-entrypoint.d/10-generate-config.sh && \
-    echo 'window.runtimeConfig = {' >> /docker-entrypoint.d/10-generate-config.sh && \
-    echo '  API_BASE_URL: "${API_BASE_URL:-http://localhost:8000}",' >> /docker-entrypoint.d/10-generate-config.sh && \
-    echo '  APP_TITLE: "${APP_TITLE:-Incarceration Bot Dashboard}"' >> /docker-entrypoint.d/10-generate-config.sh && \
-    echo '};' >> /docker-entrypoint.d/10-generate-config.sh && \
-    echo 'EOF' >> /docker-entrypoint.d/10-generate-config.sh && \
-    chmod +x /docker-entrypoint.d/10-generate-config.sh
+# Copy the runtime config generation script
+COPY generate-config.sh /docker-entrypoint.d/10-generate-config.sh
+RUN chmod +x /docker-entrypoint.d/10-generate-config.sh
 
 # Expose port 80
 EXPOSE 80
