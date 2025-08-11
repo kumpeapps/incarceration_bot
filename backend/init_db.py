@@ -22,9 +22,20 @@ logger = logging.getLogger(__name__)
 try:
     from alembic.utils import check_multiple_heads, merge_heads_safely
     alembic_utils_available = True
-except ImportError as e:
-    logger.warning("Could not import alembic utils: %s", e)
-    alembic_utils_available = False
+except ImportError:
+    # Fallback to old location for backward compatibility
+    try:
+        import sys
+        import os
+        alembic_dir = os.path.join(os.path.dirname(__file__), 'alembic')
+        if alembic_dir not in sys.path:
+            sys.path.append(alembic_dir)
+        from migration_utils import check_multiple_heads, merge_heads_safely
+        alembic_utils_available = True
+        logger.info("Using legacy migration_utils import")
+    except ImportError as e:
+        logger.warning("Could not import alembic utils: %s", e)
+        alembic_utils_available = False
 
 # Add environment variable to control auto-merge behavior
 ALLOW_AUTO_MERGE = os.getenv('ALEMBIC_ALLOW_AUTO_MERGE', 'false').lower() == 'true'

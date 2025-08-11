@@ -12,18 +12,48 @@ import sys
 from alembic import op
 import sqlalchemy as sa
 
-# Add the backend directory to Python path to import utils
-backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+# Add the alembic directory to the path to import migration_utils
+alembic_dir = os.path.dirname(__file__)
+parent_dir = os.path.dirname(alembic_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
 
-# Import from the alembic utils package
-from alembic.utils import (
-    column_exists, 
-    safe_add_column, 
-    safe_rename_column, 
-    execute_sql_if_condition
-)
+try:
+    # Try new package structure first
+    from alembic.utils import (
+        column_exists, 
+        safe_add_column, 
+        safe_rename_column, 
+        execute_sql_if_condition
+    )
+except ImportError:
+    # Fallback to old migration_utils
+    try:
+        from migration_utils import (
+            column_exists, 
+            safe_add_column, 
+            safe_rename_column, 
+            execute_sql_if_condition
+        )
+    except ImportError as e:
+        print(f"Warning: Could not import migration utilities: {e}")
+        print("Migration will attempt to run without helper functions")
+        
+        def column_exists(table_name, column_name):
+            """Fallback function"""
+            return False
+        
+        def safe_add_column(*args, **kwargs):
+            """Fallback function"""
+            pass
+        
+        def safe_rename_column(*args, **kwargs):
+            """Fallback function"""
+            pass
+        
+        def execute_sql_if_condition(*args, **kwargs):
+            """Fallback function"""
+            pass
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
