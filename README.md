@@ -1,10 +1,164 @@
 # Incarceration Bot
 ![Docker Image Version](https://img.shields.io/docker/v/justinkumpe/incarceration_bot?sort=semver&logo=docker)
+![Docker API Version](https://img.shields.io/docker/v/justinkumpe/incarceration_bot_api?sort=semver&logo=docker&label=API)
+![Docker Frontend Version](https://img.shields.io/docker/v/justinkumpe/incarceration_bot_frontend?sort=semver&logo=docker&label=Frontend)
  
-This bot is a docker container for scraping jail websites and saving inmate data to your database.
+A comprehensive jail monitoring system that scrapes inmate data from county jail websites and provides a modern web interface for monitoring arrests and managing notifications.
 
-### Current Jails
-##### Feel free to request additional jails (or submit a pull request to add yourself). I am trying to get more jails added as I have time. If the jail uses zuercher portal then it just needs to be added to the jails.json file (or raise issue and I can do it pretty quickly). Other jails need to figure out how to scrape the website first
+## 🌟 Key Features
+
+- **Multi-Jail Support**: Monitor 100+ county jails across the United States
+- **Real-time Notifications**: Receive alerts when monitored individuals are arrested or released
+- **Modern Web Interface**: React-based frontend with responsive design
+- **REST API**: Full-featured API for integration with other systems
+- **User Management**: Multi-user support with role-based access control
+- **Advanced Search**: Search inmates across all monitored jails with filtering
+- **Days Incarcerated Tracking**: Automatic calculation of incarceration duration
+- **Mugshot Support**: Automatic fetching and display of inmate photos
+- **Performance Optimized**: Asynchronous processing for faster scraping
+
+## 🏗️ Project Architecture
+
+- **`backend/`** - Python backend with scraping engine and FastAPI web API
+- **`frontend/`** - React/TypeScript web interface with Material-UI components
+- **`docker/`** - Multi-stage Docker configurations for all services
+- **`docs/`** - Comprehensive documentation and deployment guides
+
+### 🐳 Docker Images
+
+The project consists of three optimized Docker images:
+
+- **`justinkumpe/incarceration_bot`** - Core scraping service (backend only)
+- **`justinkumpe/incarceration_bot_api`** - FastAPI web service
+- **`justinkumpe/incarceration_bot_frontend`** - React web interface
+
+## 🚀 Quick Start
+
+### Full Stack Deployment (Recommended)
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/kumpeapps/incarceration_bot.git
+   cd incarceration_bot
+   ```
+
+2. **Configure environment:**
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your database and notification settings
+   ```
+
+3. **Start all services:**
+
+   ```bash
+   # For development (local build)
+   docker-compose up -d
+   
+   # For production (pre-built images)
+   docker-compose -f docker-compose.prod.yml up -d
+   ```
+
+4. **Access the application:**
+   - **Web Interface**: <http://localhost:3000>
+   - **API Documentation**: <http://localhost:8000/docs>
+   - **Database Admin**: <http://localhost:8080> (if enabled)
+
+5. **Default credentials:**
+   - **Admin**: `admin` / `admin123`
+   - **User**: `user` / `user123`
+
+### Backend Only Deployment
+
+For headless operation without the web interface:
+
+```bash
+docker-compose -f docker-compose.yml.example up -d
+```
+
+## 🎨 Web Interface Features
+
+The modern React-based interface provides comprehensive jail monitoring capabilities:
+
+### 📊 Dashboard
+
+- Real-time system statistics and activity overview
+- Recent arrests and releases summary
+- Monitor status and notification history
+- System health indicators
+
+### 🔍 Inmate Search & Management
+
+- **Advanced Search**: Search across all monitored jails with multiple filters
+- **Detailed View**: Complete inmate information including charges, dates, and mugshots
+- **Days Incarcerated**: Automatic calculation of incarceration duration
+- **Status Tracking**: Real-time custody status with release date management
+- **Booking History**: Track multiple incarcerations for the same individual
+
+### 🔔 Monitor Management
+
+- **Personal Monitors**: Add and manage arrest notifications for specific individuals
+- **Multi-User Support**: Each user maintains their own monitor list
+- **Notification Settings**: Configure Pushover alerts with custom priorities
+- **Real-time Updates**: Instant notifications when monitored individuals are arrested
+
+### 👥 User Management
+
+- **Role-Based Access**: Admin and standard user roles
+- **Secure Authentication**: JWT-based session management
+- **User Profiles**: Manage notification preferences and settings
+
+### 🏢 Jail Management
+
+- **Jail Directory**: View all supported jails with status indicators
+- **Configuration**: Enable/disable specific jails for monitoring
+- **Performance Metrics**: Track scraping success rates and timing
+
+## ⚡ Technical Features & Optimizations
+
+### 🔄 Asynchronous Processing
+
+- **Concurrent HTTP Requests**: Utilizes `aiohttp` for parallel web scraping
+- **Connection Pooling**: Reuses connections for improved performance
+- **Rate Limiting**: Configurable concurrency to prevent server overload
+- **Fallback Support**: Graceful degradation to synchronous processing when needed
+
+### 🔔 Advanced Notification System
+
+- **Multi-User Support**: Fixed critical bug where only the first user received notifications
+- **Duplicate Prevention**: Smart filtering prevents spam notifications
+- **Pushover Integration**: Rich notifications with custom priorities and sounds
+- **Webhook Support**: Heartbeat monitoring and custom webhook integrations
+
+### 📊 Data Management
+
+- **Intelligent Release Detection**: Uses `(name, arrest_date)` tuples for accurate tracking
+- **Automatic Date Calculations**: Real-time incarceration duration tracking
+- **Status Consistency**: Unified status logic across all interfaces
+- **Database Optimization**: Efficient queries and connection management
+
+### 🖼️ Image Processing
+
+- **Async Mugshot Fetching**: Parallel image downloads with timeout controls
+- **Automatic Retry Logic**: Handles failed downloads gracefully
+- **Storage Optimization**: Efficient image storage and retrieval
+
+### 🐳 Deployment Features
+
+- **Multi-Stage Docker Builds**: Optimized images for production deployment
+- **Environment Flexibility**: Support for development, staging, and production configs
+- **Health Monitoring**: Built-in health checks and status monitoring
+- **Maintenance Mode**: Graceful service maintenance with user notifications
+
+## 🏛️ Supported Jails
+
+### 100+ County Jails Across the United States
+
+We continuously expand our jail coverage. If your county uses the Zuercher portal, it can be added quickly to our `jails.json` database. For other jail systems, custom scraping implementation may be required.
+
+**📝 Request Additional Jails**: Submit an issue or pull request to add your county jail.
+
 | State    | Jail              | Jail ID          | Added In Version | Mugshot                     |
 |----------|-------------------|------------------|------------------|-----------------------------|
 | Arkansas | Benton County     | benton-so-ar     | 1.0.0            | :white_check_mark:          |
@@ -122,27 +276,172 @@ This bot is a docker container for scraping jail websites and saving inmate data
 | Wisconsin | Washburn County | washburn-so-wi  | 3.0.0            | :white_check_mark: |
 | Wyoming  | Teton County    | teton-so-wy     | 3.0.0            | :white_check_mark: |
 
-### Example Docker Compose File
+## 📋 Configuration & Environment Variables
 
-```yaml
-services:
-  incarceration_bot:
-    image: "incarceration_bot:latest"
-    environment:
-      # - TZ=America/Chicago # Defaults to UTC if not specified
-      # - DATABASE_URI=<database_uri> #(only if not using mysql variables)
-      # - MYSQL_SERVER=<mysql_server>
-      # - MYSQL_USERNAME=<mysql_username>
-      # - MYSQL_PASSWORD=<mysql_password>
-      # - MYSQL_DATABASE=<mysql_database>
-      # - MYSQL_PORT=<mysql_port> # default is 3306 if not specified
-      # - PUSHOVER_API_KEY=<pushover_api_key> # Pushover disabled if not specified
-      # - PUSHOVER_PRIORITY=<pushover_priority> # default 1 if not specified
-      # - PUSHOVER_SOUND=<pushover_sound> # Pushover default used if not specified
-      # - RUN_SCHEDULE=<hours to run in 00:00 format comma-separated> # If not specified default is 01:00,05:00,09:00,13:00,17:00,21:00
-      # - ENABLE_JAILS_CONTAINING=<comma-separated list of jails to enable> # this enables jails that contain specified strings. Default is all jails enabled. Example: for all jails (in our database) in AR input ar.
-      # - ON_DEMAND=<True/False> # Default is False. Set this to True to bypass schedule running all enabled jails immediately then exit.
-      # - HEARTBEAT_WEBHOOK=<webhook_url> # Optional. Sends POST to given webhook at end of each run cycle.
-      # - FETCH_MUGSHOTS=<True/False> # Default is False. Enable to fetch mugshots for inmates.
-      # - MUGSHOT_TIMEOUT=<seconds> # Default is 5. Timeout in seconds for fetching mugshots.
+The system supports extensive configuration through environment variables:
+
+### Core Database Settings
+
+```bash
+# Database Connection (choose one method)
+DATABASE_URI=mysql://user:password@host:port/database  # Direct URI
+# OR
+MYSQL_SERVER=localhost
+MYSQL_USERNAME=your_username
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=incarceration_bot
+MYSQL_PORT=3306
 ```
+
+### Notification Settings
+
+```bash
+# Pushover Integration
+PUSHOVER_API_KEY=your_pushover_api_key
+PUSHOVER_PRIORITY=1                    # -2 to 2 (2 = emergency)
+PUSHOVER_SOUND=pushover               # Sound name for notifications
+
+# Webhook Integration
+HEARTBEAT_WEBHOOK=https://your-webhook-url.com/endpoint
+```
+
+### Operational Settings
+
+```bash
+# Timezone
+TZ=America/Chicago                    # Defaults to UTC
+
+# Scheduling
+RUN_SCHEDULE=01:00,05:00,09:00,13:00,17:00,21:00  # 24-hour format
+ON_DEMAND=False                       # Set True for immediate execution
+
+# Jail Filtering
+ENABLE_JAILS_CONTAINING=ar,tx         # Enable jails containing these strings
+
+# Image Processing
+FETCH_MUGSHOTS=True                   # Enable mugshot downloading
+MUGSHOT_TIMEOUT=5                     # Timeout in seconds
+```
+
+### API & Security Settings
+
+```bash
+# JWT Configuration
+SECRET_KEY=your-secret-key-here
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# CORS Settings
+FRONTEND_URL=http://localhost:3000    # For development
+```
+
+## 🚢 Deployment Options
+
+### Development Environment
+
+```bash
+# Clone and setup
+git clone https://github.com/kumpeapps/incarceration_bot.git
+cd incarceration_bot
+cp .env.example .env
+
+# Start with local builds
+docker-compose up -d
+```
+
+### Production Deployment
+
+```bash
+# Use pre-built production images
+docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
+```
+
+### Beta/Staging Environment
+
+```bash
+# Use beta images for testing
+docker-compose -f docker-compose.beta.yml --env-file .env.beta up -d
+```
+
+### Headless Backend Only
+
+For automated monitoring without the web interface:
+
+```bash
+# Backend scraper only
+docker-compose -f docker-compose.yml.example up -d
+```
+
+## 🔧 Maintenance & Monitoring
+
+### Health Checks
+
+All services include built-in health monitoring:
+
+- **Backend API**: `GET /health`
+- **Database**: Connection status checks
+- **Scraper**: Heartbeat webhook integration
+
+### Maintenance Mode
+
+```bash
+# Enable maintenance mode
+docker exec incarceration_bot python maintenance_mode.py --enable
+
+# Disable maintenance mode  
+docker exec incarceration_bot python maintenance_mode.py --disable
+```
+
+### Database Management
+
+```bash
+# Initialize database
+docker exec incarceration_bot python init_db.py
+
+# Run migrations
+docker exec incarceration_bot alembic upgrade head
+
+# Create admin user
+docker exec incarceration_bot python create_admin.py
+```
+
+## 📊 Performance & Optimization
+
+The system includes several performance optimizations:
+
+- **Asynchronous scraping** for faster data collection
+- **Connection pooling** for database efficiency  
+- **Intelligent caching** to reduce redundant requests
+- **Optimized Docker images** with multi-stage builds
+- **Rate limiting** to prevent server overload
+- **Background processing** for non-blocking operations
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our contributing guidelines:
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Commit changes**: `git commit -m 'Add amazing feature'`
+4. **Push to branch**: `git push origin feature/amazing-feature`
+5. **Open a Pull Request**
+
+### Adding New Jails
+
+- **Zuercher-based jails**: Add to `backend/jails.json`
+- **Custom scraping**: Implement in `backend/scrapes/`
+- **Submit issues** for jail requests
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **GitHub Issues**: [Report bugs](https://github.com/kumpeapps/incarceration_bot/issues)
+- **Discussions**: [Ask questions](https://github.com/kumpeapps/incarceration_bot/discussions)  
+- **Documentation**: Check the `/docs` folder for detailed guides
+
+---
+
+**⭐ Star this repository if you find it useful!**
