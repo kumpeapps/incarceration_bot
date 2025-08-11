@@ -11,13 +11,15 @@ import {
   PaginatedResponse,
   DashboardStats,
 } from '../types';
+import { getConfig } from '../config/runtime';
 
 class ApiService {
   private api: AxiosInstance;
 
   constructor() {
+    const config = getConfig();
     this.api = axios.create({
-      baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+      baseURL: config.API_BASE_URL,
       headers: {
         'Content-Type': 'application/json',
       },
