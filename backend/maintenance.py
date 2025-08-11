@@ -11,6 +11,14 @@ from database_connect import new_session
 from sqlalchemy import text
 import logging
 
+# Import from the alembic utils package  
+try:
+    from alembic.utils import check_multiple_heads, merge_heads_safely, show_migration_history
+    alembic_utils_available = True
+except ImportError as e:
+    logging.warning("Could not import alembic utils: %s", e)
+    alembic_utils_available = False
+
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -254,6 +262,35 @@ def cleanup_duplicates_locked(session):
 
 def check_alembic_heads():
     """Check Alembic migration heads and provide info"""
+    if not alembic_utils_available:
+        logger.error("Alembic utils not available, falling back to subprocess")
+        return _check_alembic_heads_fallback()
+    
+    try:
+        logger.info("Checking Alembic migration status...")
+        has_multiple, heads = check_multiple_heads()
+        
+        print("Current Alembic heads:")
+        for head in heads:
+            print(head)
+        
+        if has_multiple:
+            print(f"\n⚠️  WARNING: {len(heads)} heads found (should be 1)")
+            print("This indicates conflicting migration branches.")
+            print("\nTo fix:")
+            print("1. Run: docker-compose exec backend_api python maintenance.py merge-heads")
+            print("2. Or manually: docker-compose exec backend_api alembic merge -m 'merge heads' heads")
+            return False
+        else:
+            print("✅ Single head found - migrations are clean")
+            return True
+            
+    except Exception as e:
+        logger.error("Failed to check Alembic heads: %s", e)
+        return False
+
+def _check_alembic_heads_fallback():
+    """Fallback implementation using subprocess"""
     try:
         import subprocess
         import os
@@ -262,7 +299,8 @@ def check_alembic_heads():
         
         # Get current heads
         result = subprocess.run(['alembic', 'heads'], 
-                              capture_output=True, text=True, cwd=os.getcwd())
+                              capture_output=True, text=True, cwd=os.getcwd(),
+                              check=False)
         
         if result.returncode == 0:
             heads = result.stdout.strip()
@@ -284,15 +322,29 @@ def check_alembic_heads():
                 print("✅ Single head found - migrations are clean")
                 return True
         else:
-            logger.error(f"Failed to check heads: {result.stderr}")
+            logger.error("Failed to check heads: %s", result.stderr)
             return False
             
     except Exception as e:
-        logger.error(f"Failed to check Alembic heads: {e}")
+        logger.error("Failed to check Alembic heads: %s", e)
         return False
 
 def merge_alembic_heads():
     """Automatically merge multiple Alembic heads"""
+    if not alembic_utils_available:
+        logger.error("Alembic utils not available, falling back to subprocess")
+        return _merge_alembic_heads_fallback()
+    
+    try:
+        logger.info("Merging Alembic heads...")
+        return merge_heads_safely(allow_auto_merge=True)
+            
+    except Exception as e:
+        logger.error("Failed to merge Alembic heads: %s", e)
+        return False
+
+def _merge_alembic_heads_fallback():
+    """Fallback implementation using subprocess"""
     try:
         import subprocess
         import os
@@ -301,10 +353,11 @@ def merge_alembic_heads():
         
         # First, check if we actually have multiple heads
         result = subprocess.run(['alembic', 'heads'], 
-                              capture_output=True, text=True, cwd=os.getcwd())
+                              capture_output=True, text=True, cwd=os.getcwd(),
+                              check=False)
         
         if result.returncode != 0:
-            logger.error(f"Failed to check heads: {result.stderr}")
+            logger.error("Failed to check heads: %s", result.stderr)
             return False
             
         heads = result.stdout.strip()
@@ -314,12 +367,12 @@ def merge_alembic_heads():
             logger.info("Only one head found - no merge needed")
             return True
             
-        logger.info(f"Found {len(head_lines)} heads - merging...")
+        logger.info("Found %d heads - merging...", len(head_lines))
         
         # Create merge migration
         merge_result = subprocess.run([
             'alembic', 'merge', '-m', 'merge conflicting heads', 'heads'
-        ], capture_output=True, text=True, cwd=os.getcwd())
+        ], capture_output=True, text=True, cwd=os.getcwd(), check=False)
         
         if merge_result.returncode == 0:
             logger.info("✅ Heads merged successfully")
@@ -328,24 +381,39 @@ def merge_alembic_heads():
             
             # Now upgrade to the new merged head
             upgrade_result = subprocess.run(['alembic', 'upgrade', 'head'],
-                                          capture_output=True, text=True, cwd=os.getcwd())
+                                          capture_output=True, text=True, cwd=os.getcwd(),
+                                          check=False)
             
             if upgrade_result.returncode == 0:
                 logger.info("✅ Database upgraded to merged head")
                 return True
             else:
-                logger.error(f"Failed to upgrade after merge: {upgrade_result.stderr}")
+                logger.error("Failed to upgrade after merge: %s", upgrade_result.stderr)
                 return False
         else:
-            logger.error(f"Failed to merge heads: {merge_result.stderr}")
+            logger.error("Failed to merge heads: %s", merge_result.stderr)
             return False
             
     except Exception as e:
-        logger.error(f"Failed to merge Alembic heads: {e}")
+        logger.error("Failed to merge Alembic heads: %s", e)
         return False
 
-def show_migration_history():
+def show_history():
     """Show current migration history"""
+    if not alembic_utils_available:
+        logger.error("Alembic utils not available, falling back to subprocess")
+        return _show_migration_history_fallback()
+    
+    try:
+        logger.info("Showing migration history...")
+        return show_migration_history()
+            
+    except Exception as e:
+        logger.error("Failed to show migration history: %s", e)
+        return False
+
+def _show_migration_history_fallback():
+    """Fallback implementation using subprocess"""
     try:
         import subprocess
         import os
@@ -353,18 +421,19 @@ def show_migration_history():
         logger.info("Showing migration history...")
         
         result = subprocess.run(['alembic', 'history'], 
-                              capture_output=True, text=True, cwd=os.getcwd())
+                              capture_output=True, text=True, cwd=os.getcwd(),
+                              check=False)
         
         if result.returncode == 0:
             print("Migration history:")
             print(result.stdout)
             return True
         else:
-            logger.error(f"Failed to show history: {result.stderr}")
+            logger.error("Failed to show history: %s", result.stderr)
             return False
             
     except Exception as e:
-        logger.error(f"Failed to show migration history: {e}")
+        logger.error("Failed to show migration history: %s", e)
         return False
 
 def main():
@@ -429,7 +498,7 @@ def main():
     elif args.command == 'merge-heads':
         success = merge_alembic_heads()
     elif args.command == 'migration-history':
-        success = show_migration_history()
+        success = show_history()
     else:
         logger.error(f"Unknown command: {args.command}")
         success = False

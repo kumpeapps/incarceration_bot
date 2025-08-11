@@ -1,10 +1,29 @@
-"""Fix users table column names
+"""Fix users table columns
 
 Revision ID: 006_fix_users_table_columns
-Revises: 005_monitor_inmate_links
-Create Date: 2025-08-10 20:30:00.000000
+Revises: 005_update_admin
+Create Date: 2024-01-01 00:00:00.000000
 
 """
+from typing import Sequence, Union
+import os
+import sys
+
+from alembic import op
+import sqlalchemy as sa
+
+# Add the backend directory to Python path to import utils
+backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
+# Import from the alembic utils package
+from alembic.utils import (
+    column_exists, 
+    safe_add_column, 
+    safe_rename_column, 
+    execute_sql_if_condition
+)
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
@@ -99,6 +118,20 @@ def upgrade():
     
     # Step 2: Add role column (only if needed)
     safe_add_column('users', 'role', sa.String(length=20), nullable=False, server_default='user')
+    
+    # Step 2.1: Explicitly update existing rows to ensure consistency across databases
+    execute_sql_if_condition(
+        sql="""
+            UPDATE users 
+            SET role = 'user'
+            WHERE role IS NULL
+        """,
+        condition_sql="""
+            SELECT COUNT(*) FROM users 
+            WHERE role IS NULL
+        """,
+        description="ensuring all existing rows have the default role value"
+    )
     
     # Step 3: Update role values based on is_admin (only if needed)
     execute_sql_if_condition(
