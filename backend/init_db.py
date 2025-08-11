@@ -14,9 +14,20 @@ from pathlib import Path
 # Add the app directory to Python path
 sys.path.insert(0, '/app')
 
-# Configure logging
+# Configure logging first
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Import from the alembic utils package  
+try:
+    from alembic.utils import check_multiple_heads, merge_heads_safely
+    alembic_utils_available = True
+except ImportError as e:
+    logger.warning("Could not import alembic utils: %s", e)
+    alembic_utils_available = False
+
+# Add environment variable to control auto-merge behavior
+ALLOW_AUTO_MERGE = os.getenv('ALEMBIC_ALLOW_AUTO_MERGE', 'false').lower() == 'true'
 
 def wait_for_database(max_retries=30, delay=2):
     """Wait for database to be available."""
@@ -52,6 +63,26 @@ def run_alembic_migrations():
         
         logger.info("Running Alembic migrations...")
         
+        # Check for multiple heads using the shared utility
+        if alembic_utils_available:
+            has_multiple, heads = check_multiple_heads()
+            if has_multiple:
+                logger.warning("Multiple Alembic heads detected (%d heads)", len(heads))
+                
+                if ALLOW_AUTO_MERGE:
+                    logger.info("Auto-merge is enabled, attempting to merge heads...")
+                    if not merge_heads_safely(allow_auto_merge=True):
+                        logger.error("Auto-merge failed, halting startup for safety")
+                        return False
+                else:
+                    logger.error("Multiple heads detected but auto-merge is disabled")
+                    logger.error("Set ALEMBIC_ALLOW_AUTO_MERGE=true to enable auto-merge")
+                    logger.error("Or resolve manually:")
+                    logger.error("  docker-compose exec backend_api alembic merge -m 'merge heads' heads")
+                    logger.error("  docker-compose exec backend_api alembic upgrade head")
+                    logger.error("Halting startup to prevent database inconsistencies")
+                    return False
+        
         # Run migrations to head
         command.upgrade(alembic_cfg, 'head')
         
@@ -59,9 +90,19 @@ def run_alembic_migrations():
         return True
         
     except Exception as e:
-        logger.error(f"Alembic migration failed: {e}")
+        logger.error("Alembic migration failed: %s", e)
         
-        # Fallback to manual migration if Alembic fails
+        # Check if this is a multiple heads error
+        error_str = str(e).lower()
+        if 'multiple head revisions' in error_str:
+            logger.error("Multiple head revisions detected in migration error")
+            logger.error("Halting startup to prevent database inconsistencies")
+            logger.error("Please resolve manually:")
+            logger.error("  docker-compose exec backend_api alembic merge -m 'merge heads' heads")
+            logger.error("  docker-compose exec backend_api alembic upgrade head")
+            return False
+        
+        # For other errors, fall back to manual migration
         logger.info("Attempting manual migration as fallback...")
         return run_manual_migration_fallback()
 
