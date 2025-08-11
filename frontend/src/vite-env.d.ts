@@ -8,3 +8,12 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+declare global {
+  interface Window {
+    runtimeConfig?: {
+      API_BASE_URL: string;
+      APP_TITLE: string;
+    };
+  }
+}
