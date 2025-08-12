@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Config Test</title>
+    <script src="/config.js"></script>
+</head>
+<body>
+    <h1>Runtime Configuration Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const results = document.getElementById('results');
+            
+            if (window.runtimeConfig) {
+                results.innerHTML = `
+                    <h2>✅ Runtime Config Loaded Successfully</h2>
+                    <p><strong>API_BASE_URL:</strong> ${window.runtimeConfig.API_BASE_URL}</p>
+                    <p><strong>APP_TITLE:</strong> ${window.runtimeConfig.APP_TITLE}</p>
+                `;
+            } else {
+                results.innerHTML = `
+                    <h2>❌ Runtime Config Not Found</h2>
+                    <p>window.runtimeConfig is undefined</p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
