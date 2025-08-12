@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     UniqueConstraint
 )
+from sqlalchemy.orm import relationship
 from database_connect import Base
 from passlib.context import CryptContext
 
@@ -24,7 +25,6 @@ class User(Base):
         username (str): Unique username.
         email (str): User email address.
         hashed_password (str): Bcrypt hashed password.
-        role (str): User role (admin, user).
         is_active (bool): Whether the user account is active.
         created_at (datetime): When the user was created.
         updated_at (datetime): When the user was last updated.
@@ -40,10 +40,12 @@ class User(Base):
     username = Column(String(50), nullable=False, unique=True)
     email = Column(String(255), nullable=False, unique=True)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(String(20), nullable=False, default="user")
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user_groups = relationship("UserGroup", foreign_keys="UserGroup.user_id", back_populates="user", cascade="all, delete-orphan")
 
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash."""
@@ -60,8 +62,27 @@ class User(Base):
             "id": self.id,
             "username": self.username,
             "email": self.email,
-            "role": self.role,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "groups": [ug.group.to_dict() for ug in self.user_groups if ug.group and ug.group.is_active],
         }
+
+    def has_group(self, group_name: str) -> bool:
+        """Check if user belongs to a specific group."""
+        return any(ug.group.name == group_name and ug.group.is_active 
+                  for ug in self.user_groups if ug.group)
+
+    def is_admin(self) -> bool:
+        """Check if user has admin privileges."""
+        return self.has_group("admin")
+
+    def get_groups(self) -> list:
+        """Get list of active groups user belongs to."""
+        return [ug.group.name for ug in self.user_groups 
+                if ug.group and ug.group.is_active]
+
+    @property
+    def role(self) -> str:
+        """Backward compatibility property that returns 'admin' if user is admin, else 'user'."""
+        return "admin" if self.is_admin() else "user"

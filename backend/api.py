@@ -20,6 +20,9 @@ from models.MonitorLink import MonitorLink
 from models.MonitorInmateLink import MonitorInmateLink
 from models.Jail import Jail
 from models.User import User
+from models.Group import Group
+from models.UserGroup import UserGroup
+from helpers.user_group_service import UserGroupService
 import database_connect as db
 
 app = FastAPI(title="Incarceration Bot API", version="1.0.0")
@@ -60,7 +63,7 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
-    role: str = "user"
+    groups: List[str] = ["user"]  # List of group names to assign
 
 class InmateResponse(BaseModel):
     id: int
@@ -129,6 +132,39 @@ class DashboardStats(BaseModel):
     active_jails: int
     recent_arrests: int
     recent_releases: int
+
+# Group management models
+class GroupCreate(BaseModel):
+    name: str
+    display_name: str
+    description: Optional[str] = None
+
+class GroupResponse(BaseModel):
+    id: int
+    name: str
+    display_name: str
+    description: Optional[str]
+    is_active: bool
+    created_at: str
+    updated_at: str
+    
+    class Config:
+        from_attributes = True
+
+class UserGroupAssign(BaseModel):
+    group_name: str
+
+class AmemberUserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+    amember_user_id: int
+    is_active: bool = True
+
+class AmemberUserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
 
 # Database dependency
 def get_db():
@@ -573,19 +609,23 @@ async def create_user(user_data: UserCreate, current_user: User = Depends(get_cu
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=User.hash_password(user_data.password),
-        role=user_data.role
+        hashed_password=User.hash_password(user_data.password)
     )
     
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     
+    # Assign groups
+    service = UserGroupService(db)
+    for group_name in user_data.groups:
+        service.add_user_to_group(new_user.id, group_name, current_user.id)
+    
     return new_user.to_dict()
 
 @app.put("/users/{user_id}")
 async def update_user(user_id: int, user_data: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "admin":
+    if not current_user.is_admin():
         raise HTTPException(status_code=403, detail="Admin access required")
     
     user = db.query(User).filter(User.id == user_id).first()
@@ -607,11 +647,10 @@ async def update_user(user_id: int, user_data: dict, current_user: User = Depend
             raise HTTPException(status_code=400, detail="Email already exists")
         user.email = user_data["email"]
     
-    if "role" in user_data:
-        user.role = user_data["role"]
-    
     if "password" in user_data and user_data["password"]:
         user.hashed_password = User.hash_password(user_data["password"])
+    
+    # Note: Group management should be done through separate group endpoints
     
     db.commit()
     db.refresh(user)
@@ -620,7 +659,7 @@ async def update_user(user_id: int, user_data: dict, current_user: User = Depend
 
 @app.delete("/users/{user_id}")
 async def delete_user(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "admin":
+    if not current_user.is_admin():
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Prevent admin from deleting themselves
@@ -1037,6 +1076,189 @@ async def delete_monitor_inmate_link(
     
     return {"message": "Link deleted successfully"}
 
+
+# Group Management Endpoints
+
+@app.get("/groups")
+async def get_groups(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all groups (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    groups = db.query(Group).filter(Group.is_active == True).all()
+    return [group.to_dict() for group in groups]
+
+
+@app.post("/groups")
+async def create_group(group_data: GroupCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if group already exists
+    existing_group = db.query(Group).filter(Group.name == group_data.name).first()
+    if existing_group:
+        raise HTTPException(status_code=400, detail="Group already exists")
+    
+    group = Group(
+        name=group_data.name,
+        display_name=group_data.display_name,
+        description=group_data.description
+    )
+    
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    
+    return group.to_dict()
+
+
+@app.get("/users/{user_id}/groups")
+async def get_user_groups(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get groups for a specific user."""
+    # Users can view their own groups, admins can view any user's groups
+    if not current_user.is_admin() and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    service = UserGroupService(db)
+    return service.get_user_groups(user_id)
+
+
+@app.post("/users/{user_id}/groups")
+async def assign_user_to_group(user_id: int, group_data: UserGroupAssign, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Assign a user to a group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    service = UserGroupService(db)
+    success = service.add_user_to_group(user_id, group_data.group_name, current_user.id)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to assign user to group")
+    
+    return {"message": f"User assigned to group {group_data.group_name}"}
+
+
+@app.delete("/users/{user_id}/groups/{group_name}")
+async def remove_user_from_group(user_id: int, group_name: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Remove a user from a group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    service = UserGroupService(db)
+    success = service.remove_user_from_group(user_id, group_name)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to remove user from group")
+    
+    return {"message": f"User removed from group {group_name}"}
+
+
+@app.get("/groups/{group_name}/users")
+async def get_group_users(group_name: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all users in a group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    service = UserGroupService(db)
+    return service.get_group_users(group_name)
+
+
+# aMember Integration Endpoints
+
+@app.post("/users/amember")
+async def create_amember_user(user_data: AmemberUserCreate, db: Session = Depends(get_db)):
+    """Create a user from aMember (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    
+    # Check if user already exists by aMember ID
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    # Create new user
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=User.hash_password(user_data.password),
+        is_active=user_data.is_active
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Add to default group
+    service = UserGroupService(db)
+    service.add_user_to_group(new_user.id, "user")
+    
+    return new_user.to_dict()
+
+
+@app.put("/users/amember/{amember_user_id}")
+async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate, db: Session = Depends(get_db)):
+    """Update a user from aMember (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    
+    # Find user by username (you may need to add amember_user_id column for better tracking)
+    user = db.query(User).filter(User.username == user_data.username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update user fields
+    if user_data.username:
+        user.username = user_data.username
+    if user_data.email:
+        user.email = user_data.email
+    if user_data.is_active is not None:
+        user.is_active = user_data.is_active
+    
+    db.commit()
+    return user.to_dict()
+
+
+@app.delete("/users/amember/{amember_user_id}")
+async def delete_amember_user(amember_user_id: int, db: Session = Depends(get_db)):
+    """Deactivate a user from aMember (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    
+    # For now, we'll deactivate rather than delete to preserve data integrity
+    # You may need to add amember_user_id column for better tracking
+    # This is a placeholder implementation
+    
+    return {"message": "User deactivated"}
+
+
+@app.post("/users/amember/{amember_user_id}/groups")
+async def assign_amember_user_to_group(amember_user_id: int, group_data: UserGroupAssign, db: Session = Depends(get_db)):
+    """Assign aMember user to group (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    # You may need to add amember_user_id column for better tracking
+    
+    # This is a placeholder implementation
+    return {"message": f"User {amember_user_id} assigned to group {group_data.group_name}"}
+
+
+@app.delete("/users/amember/{amember_user_id}/groups/{group_name}")
+async def remove_amember_user_from_group(amember_user_id: int, group_name: str, db: Session = Depends(get_db)):
+    """Remove aMember user from group (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    # You may need to add amember_user_id column for better tracking
+    
+    # This is a placeholder implementation
+    return {"message": f"User {amember_user_id} removed from group {group_name}"}
 
 
 if __name__ == "__main__":
