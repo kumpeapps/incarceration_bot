@@ -40,6 +40,8 @@ class User(Base):
     username = Column(String(50), nullable=False, unique=True)
     email = Column(String(255), nullable=False, unique=True)
     hashed_password = Column(String(255), nullable=False)
+    api_key = Column(String(255), nullable=True, unique=True)
+    amember_user_id = Column(Integer, nullable=True, unique=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -62,6 +64,8 @@ class User(Base):
             "id": self.id,
             "username": self.username,
             "email": self.email,
+            "api_key": self.api_key,
+            "amember_user_id": self.amember_user_id,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

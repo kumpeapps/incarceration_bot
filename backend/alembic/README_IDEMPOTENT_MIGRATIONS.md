@@ -1,41 +1,37 @@
-# Idempotent Alembic Migrations Guide
+# Idempotent Migrations Guide - Enhanced Version
 
-This guide shows how to create safe, idempotent migrations that can be run multiple times without causing errors.
+This document describes how to create and maintain idempotent database migrations in this project.
 
 ## What are Idempotent Migrations?
 
-Idempotent migrations are database migrations that can be safely executed multiple times. If a migration has already been applied (fully or partially), running it again will not cause errors or duplicate changes.
+Idempotent migrations can be run multiple times safely without causing errors or duplicating data. This provides several benefits:
 
-## Why Use Idempotent Migrations?
+1. **Better Developer Experience**: Migrations don't fail if tables/columns already exist
+2. **Safer Deployments**: Migrations can be re-run if they fail partway through
+3. **Docker Compatibility**: Containers can safely re-initialize the database
+4. **Rollback Safety**: Downgrade operations won't fail if structures are already removed
 
-1. **Production Safety**: If a migration fails halfway through, you can re-run it safely
-2. **Multi-Environment Support**: Different environments might have different starting states
-3. **Team Collaboration**: Prevents conflicts when multiple developers work on schema changes
-4. **Rollback Safety**: Partial rollbacks can be completed safely
+## Migration Utilities
 
-## Utility Functions
+The `migration_utils.py` file provides helper functions for creating idempotent migrations:
 
-The `migration_utils.py` file provides helper functions for common idempotent operations:
+### Table Operations
+- `table_exists(table_name)` - Check if a table exists
+- `safe_create_table(table_name, *columns, **kwargs)` - Create table only if it doesn't exist
+- `safe_drop_table(table_name)` - Drop table only if it exists
 
 ### Column Operations
 - `column_exists(table_name, column_name)` - Check if a column exists
 - `safe_add_column(table_name, column_name, column_type, **kwargs)` - Add column only if it doesn't exist
 - `safe_drop_column(table_name, column_name)` - Drop column only if it exists
-- `safe_rename_column(table_name, old_name, new_name, column_type)` - Rename column only if source exists and target doesn't
-
-### Table Operations
-- `table_exists(table_name)` - Check if a table exists
-
-### Index Operations
-- `index_exists(table_name, index_name)` - Check if an index exists
-- `safe_create_index(table_name, columns, index_name, unique=False)` - Create index only if it doesn't exist
-- `safe_drop_index(table_name, index_name)` - Drop index only if it exists
 
 ### Data Operations
-- `execute_sql_if_condition(sql, condition_sql, description)` - Execute SQL only if a condition is met
+- `execute_sql_if_condition(sql, condition_sql, description)` - Execute SQL only if condition is met
 
-### Utility Functions
-- `migration_summary(table_name)` - Display table structure after migration
+### Other Utilities
+- `migration_summary(table_name)` - Print table structure after migration
+- `index_exists(table_name, index_name)` - Check if an index exists
+- `safe_create_index()` / `safe_drop_index()` - Safe index operations
 
 ## Example Usage
 

@@ -120,6 +120,28 @@ def safe_drop_index(table_name, index_name):
         return False
 
 
+def safe_create_table(table_name, *columns, **kwargs):
+    """Safely create a table only if it doesn't exist"""
+    if not table_exists(table_name):
+        print(f"Creating table {table_name}")
+        op.create_table(table_name, *columns, **kwargs)
+        return True
+    else:
+        print(f"Table {table_name} already exists, skipping creation")
+        return False
+
+
+def safe_drop_table(table_name):
+    """Safely drop a table only if it exists"""
+    if table_exists(table_name):
+        print(f"Dropping table {table_name}")
+        op.drop_table(table_name)
+        return True
+    else:
+        print(f"Table {table_name} doesn't exist, skipping")
+        return False
+
+
 def get_table_columns(table_name):
     """Get all columns for a table"""
     try:

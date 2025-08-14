@@ -60,6 +60,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   last_login?: string;
+  api_key?: string;
 }
 
 export interface LoginRequest {

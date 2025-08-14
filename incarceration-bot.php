@@ -1,13 +1,7 @@
 <?php
-/**
- * aMember Plugin for Incarceration Bot User Management
- * 
- * This plugin synchronizes aMember user accounts and groups with the Incarceration Bot system.
- * It handles user creation, updates, and group assignments based on aMember product subscriptions.
- * 
- * @package aMember_Plugin_IncarcerationBot
- * @version 1.0.0
- */
+if (!defined('AM_APPLICATION_PATH')) {
+    die('Direct access not allowed');
+}
 
 class Am_Plugin_IncarcerationBot extends Am_Plugin
 {
@@ -15,28 +9,7 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
     const PLUGIN_COMM = self::COMM_FREE;
     const PLUGIN_REVISION = '1.0.0';
     
-    protected $_configPrefix = 'incarceration_bot.';
-    
-    // API configuration
-    private $api_base_url;
-    private $api_key;
-    private $timeout = 30;
-    
-    public function init()
-    {
-        parent::init();
-        
-        // Get configuration
-        $this->api_base_url = rtrim($this->getConfig('api_base_url', ''), '/');
-        $this->api_key = $this->getConfig('api_key', '');
-        
-        // Hook into aMember events
-        $this->getDi()->hook->add(Am_Event::USER_AFTER_INSERT, [$this, 'onUserInsert']);
-        $this->getDi()->hook->add(Am_Event::USER_AFTER_UPDATE, [$this, 'onUserUpdate']);
-        $this->getDi()->hook->add(Am_Event::USER_AFTER_DELETE, [$this, 'onUserDelete']);
-        $this->getDi()->hook->add(Am_Event::ACCESS_AFTER_INSERT, [$this, 'onAccessInsert']);
-        $this->getDi()->hook->add(Am_Event::ACCESS_AFTER_DELETE, [$this, 'onAccessDelete']);
-    }
+    protected $_configPrefix = 'misc.incarceration_bot.';
     
     public function getTitle()
     {
@@ -48,12 +21,32 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         return "Synchronizes aMember users and subscriptions with Incarceration Bot user management system";
     }
     
+    public function isConfigured()
+    {
+        return strlen($this->getConfig('api_base_url')) > 0 && strlen($this->getConfig('api_key')) > 0;
+    }
+    
+    public function init()
+    {
+        parent::init();
+        
+        if (!$this->isConfigured()) {
+            return;
+        }
+        
+        // Hook into aMember events
+        $this->getDi()->hook->add(Am_Event::USER_AFTER_INSERT, array($this, 'onUserInsert'));
+        $this->getDi()->hook->add(Am_Event::USER_AFTER_UPDATE, array($this, 'onUserUpdate'));
+        $this->getDi()->hook->add(Am_Event::USER_AFTER_DELETE, array($this, 'onUserDelete'));
+        $this->getDi()->hook->add(Am_Event::ACCESS_AFTER_INSERT, array($this, 'onAccessInsert'));
+        $this->getDi()->hook->add(Am_Event::ACCESS_AFTER_DELETE, array($this, 'onAccessDelete'));
+    }
+    
     public function _initSetupForm(Am_Form_Setup $form)
     {
         $form->addText('api_base_url', array('class' => 'am-el-wide'))
             ->setLabel('API Base URL')
             ->addRule('required')
-            ->addRule('regex', 'Please enter a valid URL', '/^https?:\/\/.+/')
             ->setValue('https://your-domain.com/api');
             
         $form->addText('api_key', array('class' => 'am-el-wide'))
@@ -62,16 +55,15 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             
         $form->addSelect('default_group')
             ->setLabel('Default Group for New Users')
-            ->loadOptions([
+            ->loadOptions(array(
                 'user' => 'Regular User',
                 'admin' => 'Administrator',
                 'moderator' => 'Moderator'
-            ])
+            ))
             ->setValue('user');
             
         $form->addAdvCheckbox('debug_mode')
-            ->setLabel('Debug Mode')
-            ->addRule('required');
+            ->setLabel('Debug Mode');
             
         $group = $form->addGroup('product_mapping')
             ->setLabel('Product to Group Mapping');
@@ -84,22 +76,19 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             ->setValue("# Example mappings:\n# 1=user\n# 2=admin\n# 3=moderator");
     }
     
-    /**
-     * Handle user creation
-     */
     public function onUserInsert(Am_Event $event)
     {
         $user = $event->getUser();
         $this->logDebug("User created: " . $user->login);
         
         // Create user in Incarceration Bot
-        $userData = [
+        $userData = array(
             'username' => $user->login,
             'email' => $user->email,
             'password' => $this->generateRandomPassword(),
             'amember_user_id' => $user->user_id,
             'is_active' => true
-        ];
+        );
         
         $response = $this->apiRequest('POST', '/users/amember', $userData);
         
@@ -114,20 +103,17 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Handle user updates
-     */
     public function onUserUpdate(Am_Event $event)
     {
         $user = $event->getUser();
         $this->logDebug("User updated: " . $user->login);
         
         // Update user in Incarceration Bot
-        $userData = [
+        $userData = array(
             'username' => $user->login,
             'email' => $user->email,
             'is_active' => $user->is_approved && !$user->is_locked
-        ];
+        );
         
         $response = $this->apiRequest('PUT', '/users/amember/' . $user->user_id, $userData);
         
@@ -136,9 +122,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Handle user deletion
-     */
     public function onUserDelete(Am_Event $event)
     {
         $user = $event->getUser();
@@ -152,9 +135,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Handle new access (subscription)
-     */
     public function onAccessInsert(Am_Event $event)
     {
         $access = $event->getAccess();
@@ -170,9 +150,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Handle access removal
-     */
     public function onAccessDelete(Am_Event $event)
     {
         $access = $event->getAccess();
@@ -188,32 +165,32 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Make API request to Incarceration Bot
-     */
     private function apiRequest($method, $endpoint, $data = null)
     {
-        if (empty($this->api_base_url) || empty($this->api_key)) {
+        $api_base_url = rtrim($this->getConfig('api_base_url', ''), '/');
+        $api_key = $this->getConfig('api_key', '');
+        
+        if (empty($api_base_url) || empty($api_key)) {
             $this->logError("API configuration missing");
             return false;
         }
         
-        $url = $this->api_base_url . $endpoint;
+        $url = $api_base_url . $endpoint;
         
         $ch = curl_init();
-        curl_setopt_array($ch, [
+        curl_setopt_array($ch, array(
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => $this->timeout,
+            CURLOPT_TIMEOUT => 30,
             CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HTTPHEADER => [
+            CURLOPT_HTTPHEADER => array(
                 'Content-Type: application/json',
-                'Authorization: Bearer ' . $this->api_key,
+                'Authorization: Bearer ' . $api_key,
                 'User-Agent: aMember-IncarcerationBot-Plugin/1.0.0'
-            ]
-        ]);
+            )
+        ));
         
-        if ($data && in_array($method, ['POST', 'PUT', 'PATCH'])) {
+        if ($data && in_array($method, array('POST', 'PUT', 'PATCH'))) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
         }
         
@@ -235,14 +212,11 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         return json_decode($response, true);
     }
     
-    /**
-     * Assign user to group by aMember user ID
-     */
     private function assignUserToGroupByAmemberId($amemberUserId, $groupName)
     {
-        $response = $this->apiRequest('POST', "/users/amember/{$amemberUserId}/groups", [
+        $response = $this->apiRequest('POST', "/users/amember/{$amemberUserId}/groups", array(
             'group_name' => $groupName
-        ]);
+        ));
         
         if ($response) {
             $this->logDebug("User {$amemberUserId} assigned to group: {$groupName}");
@@ -251,9 +225,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Remove user from group by aMember user ID
-     */
     private function removeUserFromGroupByAmemberId($amemberUserId, $groupName)
     {
         $response = $this->apiRequest('DELETE', "/users/amember/{$amemberUserId}/groups/{$groupName}");
@@ -265,14 +236,11 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Assign user to group by internal user ID
-     */
     private function assignUserToGroup($userId, $groupName)
     {
-        $response = $this->apiRequest('POST', "/users/{$userId}/groups", [
+        $response = $this->apiRequest('POST', "/users/{$userId}/groups", array(
             'group_name' => $groupName
-        ]);
+        ));
         
         if ($response) {
             $this->logDebug("User {$userId} assigned to group: {$groupName}");
@@ -281,22 +249,16 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Get group mapping for product
-     */
     private function getGroupForProduct($productId)
     {
         $mappings = $this->getProductGroupMappings();
         return isset($mappings[$productId]) ? $mappings[$productId] : null;
     }
     
-    /**
-     * Parse product group mappings from configuration
-     */
     private function getProductGroupMappings()
     {
         $mappingString = $this->getConfig('product_mapping.mapping', '');
-        $mappings = [];
+        $mappings = array();
         
         $lines = explode("\n", $mappingString);
         foreach ($lines as $line) {
@@ -314,9 +276,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         return $mappings;
     }
     
-    /**
-     * Check if user has other active access to products in the same group
-     */
     private function userHasOtherAccessToGroup($user, $groupName)
     {
         $mappings = $this->getProductGroupMappings();
@@ -331,18 +290,12 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         return false;
     }
     
-    /**
-     * Generate random password for new users
-     */
     private function generateRandomPassword($length = 16)
     {
         $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
         return substr(str_shuffle(str_repeat($characters, ceil($length / strlen($characters)))), 0, $length);
     }
     
-    /**
-     * Log debug message
-     */
     private function logDebug($message)
     {
         if ($this->getConfig('debug_mode')) {
@@ -350,9 +303,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    /**
-     * Log error message
-     */
     private function logError($message)
     {
         Am_Di::getInstance()->logger->error("[IncarcerationBot] " . $message);

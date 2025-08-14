@@ -32,6 +32,8 @@ import {
   Delete,
   AdminPanelSettings,
   Person,
+  Key,
+  ContentCopy,
 } from '@mui/icons-material';
 import { apiService } from '../services/api';
 import { User } from '../types';
@@ -60,6 +62,12 @@ const UsersPage: React.FC = () => {
     role: 'user',
   });
   const [formLoading, setFormLoading] = useState(false);
+
+  // API Key management state
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+  const [selectedUserForApiKey, setSelectedUserForApiKey] = useState<User | null>(null);
+  const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
 
   // Check if current user is admin
   const isAdmin = currentUser?.role === 'admin';
@@ -162,6 +170,39 @@ const UsersPage: React.FC = () => {
         console.error('Failed to delete user:', err);
         setError('Failed to delete user');
       }
+    }
+  };
+
+  const handleGenerateApiKey = async (user: User) => {
+    setSelectedUserForApiKey(user);
+    setApiKeyDialogOpen(true);
+    setGeneratedApiKey(null);
+    
+    try {
+      setApiKeyLoading(true);
+      const result = await apiService.generateApiKey(user.id);
+      setGeneratedApiKey(result.api_key);
+    } catch (err) {
+      console.error('Failed to generate API key:', err);
+      setError('Failed to generate API key');
+      setApiKeyDialogOpen(false);
+    } finally {
+      setApiKeyLoading(false);
+    }
+  };
+
+  const handleCloseApiKeyDialog = () => {
+    setApiKeyDialogOpen(false);
+    setSelectedUserForApiKey(null);
+    setGeneratedApiKey(null);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // You could add a toast notification here
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
     }
   };
 
@@ -296,6 +337,15 @@ const UsersPage: React.FC = () => {
                         <Edit />
                       </IconButton>
                     </Tooltip>
+                    <Tooltip title="Generate API Key">
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleGenerateApiKey(userItem)}
+                        color="primary"
+                      >
+                        <Key />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title={userItem.id === currentUser?.id ? "Cannot delete your own account" : "Delete"}>
                       <span>
                         <IconButton 
@@ -379,6 +429,68 @@ const UsersPage: React.FC = () => {
           >
             {formLoading ? <CircularProgress size={24} /> : editingUser ? 'Update' : 'Create'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* API Key Generation Dialog */}
+      <Dialog open={apiKeyDialogOpen} onClose={handleCloseApiKeyDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Generate API Key for {selectedUserForApiKey?.username}
+        </DialogTitle>
+        <DialogContent>
+          {apiKeyLoading ? (
+            <Box display="flex" alignItems="center" justifyContent="center" py={4}>
+              <CircularProgress />
+              <Typography sx={{ ml: 2 }}>Generating API key...</Typography>
+            </Box>
+          ) : generatedApiKey ? (
+            <Box>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                New API key generated successfully. Please copy and save this key as it won't be shown again.
+              </Typography>
+              <Paper elevation={1} sx={{ p: 2, mt: 2, backgroundColor: 'grey.50' }}>
+                <Box display="flex" alignItems="center" justifyContent="space-between">
+                  <Typography 
+                    variant="body2" 
+                    fontFamily="monospace" 
+                    sx={{ wordBreak: 'break-all', mr: 1 }}
+                  >
+                    {generatedApiKey}
+                  </Typography>
+                  <Tooltip title="Copy to clipboard">
+                    <IconButton 
+                      size="small" 
+                      onClick={() => copyToClipboard(generatedApiKey)}
+                    >
+                      <ContentCopy />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Paper>
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                Store this API key securely. It grants full access to the user's account.
+              </Alert>
+            </Box>
+          ) : (
+            <Typography>
+              This will generate a new API key for {selectedUserForApiKey?.username}. 
+              Any existing API key will be replaced.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseApiKeyDialog}>
+            {generatedApiKey ? 'Close' : 'Cancel'}
+          </Button>
+          {!apiKeyLoading && !generatedApiKey && (
+            <Button 
+              onClick={() => selectedUserForApiKey && handleGenerateApiKey(selectedUserForApiKey)} 
+              variant="contained"
+              color="primary"
+            >
+              Generate API Key
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

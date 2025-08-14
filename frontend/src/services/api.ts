@@ -202,6 +202,11 @@ class ApiService {
     await this.api.delete(`/users/${id}`);
   }
 
+  async generateApiKey(userId: number): Promise<{ message: string; user_id: number; username: string; api_key: string }> {
+    const response = await this.api.post(`/users/${userId}/generate-api-key`);
+    return response.data;
+  }
+
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await this.api.post('/auth/change-password', {
       current_password: currentPassword,

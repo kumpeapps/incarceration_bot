@@ -39,6 +39,7 @@ app.add_middleware(
 # Security
 security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+MASTER_API_KEY = os.getenv("MASTER_API_KEY")  # Optional master API key for integrations
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -182,8 +183,51 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    token = credentials.credentials
+    
+    # Check if it's the master API key
+    if MASTER_API_KEY and token == MASTER_API_KEY:
+        # Create a virtual admin user for master API key access
+        class MasterUser:
+            id = 0
+            username = "master_api"
+            email = "master@system.local"
+            is_active = True
+            api_key = MASTER_API_KEY
+            
+            def is_admin(self):
+                return True
+            
+            def has_group(self, group_name):
+                return True  # Master key has all permissions
+            
+            def get_groups(self):
+                return ["admin"]
+            
+            @property
+            def role(self):
+                return "admin"
+            
+            def to_dict(self):
+                return {
+                    "id": self.id,
+                    "username": self.username,
+                    "email": self.email,
+                    "is_active": self.is_active,
+                    "role": self.role,
+                    "groups": self.get_groups()
+                }
+        
+        return MasterUser()
+    
+    # Check if it's a regular user API key
+    user = db.query(User).filter(User.api_key == token).first()
+    if user:
+        return user
+    
+    # Finally, try JWT token
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
@@ -194,6 +238,57 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
+def get_active_user(current_user: User = Depends(get_current_user)):
+    """Get current user and check for banned/locked status."""
+    # Check if user is banned
+    if current_user.has_group("banned"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Access denied: Your account has been banned. Please contact an administrator."
+        )
+    
+    # Check if user is locked
+    if current_user.has_group("locked"):
+        raise HTTPException(
+            status_code=423,  # HTTP 423 = Locked
+            detail="Access denied: Your account has been locked. Please contact an administrator."
+        )
+    
+    # Check if user account is inactive
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Your account is inactive."
+        )
+    
+    return current_user
+
+def require_admin(current_user: User = Depends(get_active_user)):
+    """Require admin privileges."""
+    if not current_user.has_group("admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+    return current_user
+
+def require_moderator_or_admin(current_user: User = Depends(get_active_user)):
+    """Require moderator or admin privileges."""
+    if not (current_user.has_group("admin") or current_user.has_group("moderator")):
+        raise HTTPException(
+            status_code=403,
+            detail="Moderator or admin access required"
+        )
+    return current_user
+
+def can_manage_resource(current_user: User, resource_user_id: int) -> bool:
+    """Check if user can manage a resource owned by another user."""
+    # Admins and moderators can manage all resources
+    if current_user.has_group("admin") or current_user.has_group("moderator"):
+        return True
+    # Users can only manage their own resources
+    return current_user.id == resource_user_id
+
 # Authentication endpoints
 @app.post("/auth/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
@@ -201,19 +296,38 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     if not user or not user.verify_password(login_data.password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
+    # Check if user is banned
+    if user.has_group("banned"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Access denied: Your account has been banned. Please contact an administrator."
+        )
+    
+    # Check if user is locked
+    if user.has_group("locked"):
+        raise HTTPException(
+            status_code=423,  # HTTP 423 = Locked
+            detail="Access denied: Your account has been locked. Please contact an administrator."
+        )
+    
+    # Check if user account is inactive
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Your account is inactive."
+        )
+
     access_token = create_access_token(data={"sub": user.username})
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": user.to_dict()
-    }
-
-@app.post("/auth/logout")
-async def logout(current_user: User = Depends(get_current_user)):
+    }@app.post("/auth/logout")
+async def logout(current_user: User = Depends(get_active_user)):
     return {"message": "Successfully logged out"}
 
 @app.get("/auth/me")
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(current_user: User = Depends(get_active_user)):
     return current_user.to_dict()
 
 # Dashboard endpoints
@@ -474,11 +588,11 @@ async def get_inmate(
 async def get_monitors(
     page: int = 1,
     limit: int = 50,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db)
 ):
-    # Admin sees all monitors, users see only their own
-    if current_user.role == "admin":
+    # Admin and moderators see all monitors, users see only their own
+    if current_user.has_group("admin") or current_user.has_group("moderator"):
         query = db.query(Monitor)
     else:
         query = db.query(Monitor).filter(Monitor.user_id == current_user.id)
@@ -515,15 +629,15 @@ async def create_monitor(
 @app.get("/monitors/{monitor_id}")
 async def get_monitor(
     monitor_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db)
 ):
     monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
     
-    # Users can only view their own monitors, admins can view any
-    if current_user.role != "admin" and monitor.user_id != current_user.id:
+    # Users can only view their own monitors, admins and moderators can view any
+    if not can_manage_resource(current_user, monitor.user_id):
         raise HTTPException(status_code=403, detail="Not authorized to view this monitor")
     
     return monitor.to_dict()
@@ -583,15 +697,12 @@ async def get_jails(
 
 # Users endpoints (admin only)
 @app.get("/users")
-async def get_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+async def get_users(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     users = db.query(User).all()
     return [user.to_dict() for user in users]
 
 @app.post("/users")
-async def create_user(user_data: UserCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_user(user_data: UserCreate, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
@@ -674,6 +785,38 @@ async def delete_user(user_id: int, current_user: User = Depends(get_current_use
     db.commit()
     
     return {"message": "User deleted successfully"}
+
+@app.post("/users/{user_id}/generate-api-key")
+async def generate_user_api_key(
+    user_id: int, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """Generate a new API key for a user (admin only)"""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Generate new API key
+    import secrets
+    import string
+    alphabet = string.ascii_letters + string.digits
+    new_api_key = ''.join(secrets.choice(alphabet) for _ in range(32))
+    
+    # Update user with new API key
+    user.api_key = new_api_key
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "message": "API key generated successfully",
+        "user_id": user.id,
+        "username": user.username,
+        "api_key": new_api_key
+    }
 
 @app.get("/users/{user_id}/monitors")
 async def get_user_monitors(
