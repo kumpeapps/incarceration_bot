@@ -148,6 +148,26 @@ class UserGroupService:
                 "name": "moderator",
                 "display_name": "Moderators",
                 "description": "Enhanced access for content moderation"
+            },
+            {
+                "name": "api",
+                "display_name": "API Users",
+                "description": "Users who can request and use API keys"
+            },
+            {
+                "name": "locked",
+                "display_name": "Locked Users",
+                "description": "User account has been locked"
+            },
+            {
+                "name": "banned",
+                "display_name": "Banned Users",
+                "description": "No access to the system"
+            },
+            {
+                "name": "guest",
+                "display_name": "Guests",
+                "description": "Limited access for guest users"
             }
         ]
         

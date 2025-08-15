@@ -209,6 +209,7 @@ def initialize_groups():
             ('admin', 'Administrators', 'Full system access and user management'),
             ('user', 'Regular Users', 'Standard user access to monitor functionality'),
             ('moderator', 'Moderators', 'Enhanced access for content moderation'),
+            ('api', 'API Users', 'Users who can request and use API keys'),
             ('guest', 'Guests', 'Limited access for guest users'),
             ('banned', 'Banned Users', 'No access to the system'),
             ('locked', 'Locked Users', 'User account has been locked')

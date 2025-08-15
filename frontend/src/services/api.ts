@@ -4,6 +4,7 @@ import {
   Monitor,
   Jail,
   User,
+  Group,
   LoginRequest,
   LoginResponse,
   InmateSearchParams,
@@ -60,8 +61,9 @@ class ApiService {
     localStorage.removeItem('user');
   }
 
-  async getCurrentUser(): Promise<User> {
-    const response = await this.api.get('/auth/me');
+  // Configuration
+  async getUserManagementConfig(): Promise<{ external_user_management: boolean; description: string }> {
+    const response = await this.api.get('/config/user-management');
     return response.data;
   }
 
@@ -188,13 +190,49 @@ class ApiService {
     return response.data;
   }
 
-  async createUser(user: Omit<User, 'id' | 'created_at' | 'last_login' | 'updated_at'> & { password: string }): Promise<User> {
+  async createUser(user: {
+    username: string;
+    email: string;
+    password: string;
+    is_active: boolean;
+    groups: string[];
+  }): Promise<User> {
     const response = await this.api.post('/users', user);
     return response.data;
   }
 
   async updateUser(id: number, user: Partial<User>): Promise<User> {
     const response = await this.api.put(`/users/${id}`, user);
+    return response.data;
+  }
+
+  async getGroups(): Promise<Group[]> {
+    const response = await this.api.get('/groups');
+    return response.data;
+  }
+
+  async addUserToGroup(userId: number, groupName: string): Promise<void> {
+    await this.api.post(`/users/${userId}/groups`, { group_name: groupName });
+  }
+
+  async removeUserFromGroup(userId: number, groupName: string): Promise<void> {
+    await this.api.delete(`/users/${userId}/groups/${groupName}`);
+  }
+
+  async getCurrentUser(): Promise<User> {
+    const response = await this.api.get('/auth/me');
+    return response.data;
+  }
+
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<void> {
+    await this.api.post('/auth/change-password', {
+      current_password: data.currentPassword,
+      new_password: data.newPassword,
+    });
+  }
+
+  async generateMyApiKey(): Promise<{ api_key: string }> {
+    const response = await this.api.post('/my/generate-api-key');
     return response.data;
   }
 
@@ -205,13 +243,6 @@ class ApiService {
   async generateApiKey(userId: number): Promise<{ message: string; user_id: number; username: string; api_key: string }> {
     const response = await this.api.post(`/users/${userId}/generate-api-key`);
     return response.data;
-  }
-
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await this.api.post('/auth/change-password', {
-      current_password: currentPassword,
-      new_password: newPassword,
-    });
   }
 
   async linkMonitor(monitorId: number, linkData: { linked_monitor_id: number; link_reason?: string }): Promise<void> {

@@ -481,7 +481,14 @@ const InmateDetailPage: React.FC = () => {
                     Release Date
                   </Typography>
                   <Typography variant="body1" fontWeight="medium">
-                    {formatDate(inmate.release_date) === 'N/A' ? 'Still in custody' : formatDate(inmate.release_date)}
+                    {(() => {
+                      // Prioritize actual_status if available, otherwise use release_date logic
+                      if (inmate.actual_status) {
+                        return inmate.actual_status === 'in_custody' ? 'Still in custody' : formatDate(inmate.release_date);
+                      } else {
+                        return formatDate(inmate.release_date) === 'N/A' ? 'Still in custody' : formatDate(inmate.release_date);
+                      }
+                    })()}
                   </Typography>
                 </Grid>
                 <Grid item xs={12}>

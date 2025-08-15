@@ -25,13 +25,16 @@ def insert_ignore(
 
 def upsert_inmate(session: Session, inmate_data: dict, auto_commit: bool = False):
     """
-    Insert inmate or update last_seen if duplicate exists.
-    Uses MySQL's ON DUPLICATE KEY UPDATE for performance.
+    OPTIMIZED: Insert inmate or update last_seen only if significantly different.
+    Uses MySQL's ON DUPLICATE KEY UPDATE with conditional logic to reduce binlog bloat.
     Works with current unique constraint: name, race, dob, sex, arrest_date, jail_id
+    
+    OPTIMIZATION: Only updates last_seen if more than 1 hour has passed since last update.
+    This dramatically reduces MariaDB binlog writes.
     """
     engine = session.get_bind()
     if engine.dialect.name == "mysql":
-        # Use raw SQL for ON DUPLICATE KEY UPDATE
+        # OPTIMIZED: Use conditional UPDATE to avoid unnecessary writes
         sql = text("""
             INSERT INTO inmates (
                 name, race, sex, cell_block, arrest_date, held_for_agency, 
@@ -43,7 +46,13 @@ def upsert_inmate(session: Session, inmate_data: dict, auto_commit: bool = False
                 :in_custody_date, :jail_id, :hide_record, :last_seen
             )
             ON DUPLICATE KEY UPDATE
-                last_seen = VALUES(last_seen),
+                -- OPTIMIZATION: Only update last_seen if NULL or more than 1 hour old
+                last_seen = CASE 
+                    WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                    THEN VALUES(last_seen)
+                    ELSE last_seen
+                END,
+                -- Always update these fields as they may have legitimately changed
                 cell_block = VALUES(cell_block),
                 arrest_date = VALUES(arrest_date),
                 held_for_agency = VALUES(held_for_agency),

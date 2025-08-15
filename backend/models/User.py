@@ -48,6 +48,7 @@ class User(Base):
 
     # Relationships
     user_groups = relationship("UserGroup", foreign_keys="UserGroup.user_id", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
 
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash."""
@@ -69,8 +70,19 @@ class User(Base):
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_login": self.get_last_login(),
             "groups": [ug.group.to_dict() for ug in self.user_groups if ug.group and ug.group.is_active],
+            "role": self.role,
         }
+
+    def get_last_login(self) -> str | None:
+        """Get the most recent login time from sessions."""
+        if not self.sessions:
+            return None
+        
+        # Get the most recent session
+        latest_session = max(self.sessions, key=lambda s: s.login_time)
+        return latest_session.login_time.isoformat() if latest_session.login_time else None
 
     def has_group(self, group_name: str) -> bool:
         """Check if user belongs to a specific group."""

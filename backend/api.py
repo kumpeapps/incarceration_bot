@@ -5,7 +5,7 @@ FastAPI Backend for Incarceration Bot Frontend
 from datetime import datetime, timedelta
 from typing import List, Optional
 import os
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -22,6 +22,7 @@ from models.Jail import Jail
 from models.User import User
 from models.Group import Group
 from models.UserGroup import UserGroup
+from models.Session import Session as UserSession
 from helpers.user_group_service import UserGroupService
 import database_connect as db
 
@@ -40,6 +41,7 @@ app.add_middleware(
 security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 MASTER_API_KEY = os.getenv("MASTER_API_KEY")  # Optional master API key for integrations
+EXTERNAL_USER_MANAGEMENT = os.getenv("EXTERNAL_USER_MANAGEMENT", "false").lower() == "true"  # External user management system
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -158,7 +160,8 @@ class UserGroupAssign(BaseModel):
 class AmemberUserCreate(BaseModel):
     username: str
     email: str
-    password: str
+    password: Optional[str] = None
+    password_hash: Optional[str] = None
     amember_user_id: int
     is_active: bool = True
 
@@ -223,6 +226,12 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     # Check if it's a regular user API key
     user = db.query(User).filter(User.api_key == token).first()
     if user:
+        # Verify user has API access
+        if not user.has_group("api"):
+            raise HTTPException(
+                status_code=403, 
+                detail="API access denied: User does not have API permissions"
+            )
         return user
     
     # Finally, try JWT token
@@ -291,7 +300,7 @@ def can_manage_resource(current_user: User, resource_user_id: int) -> bool:
 
 # Authentication endpoints
 @app.post("/auth/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+async def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == login_data.username).first()
     if not user or not user.verify_password(login_data.password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
@@ -318,17 +327,75 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token(data={"sub": user.username})
+    
+    # Create session record
+    session = UserSession(
+        user_id=user.id,
+        session_token=access_token,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        login_time=datetime.utcnow()
+    )
+    db.add(session)
+    db.commit()
+    
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": user.to_dict()
-    }@app.post("/auth/logout")
-async def logout(current_user: User = Depends(get_active_user)):
+    }
+
+@app.post("/auth/logout")
+async def logout(current_user: User = Depends(get_active_user), db: Session = Depends(get_db)):
+    # Find and end the current session
+    # Note: In a real app, you'd want to track the current session token
+    # For now, we'll just mark the most recent active session as ended
+    active_session = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id,
+        UserSession.is_active == True
+    ).order_by(UserSession.login_time.desc()).first()
+    
+    if active_session:
+        active_session.end_session()
+        db.commit()
+    
     return {"message": "Successfully logged out"}
 
 @app.get("/auth/me")
 async def get_current_user_info(current_user: User = Depends(get_active_user)):
     return current_user.to_dict()
+
+@app.post("/auth/change-password")
+async def change_password(
+    password_data: dict, 
+    current_user: User = Depends(get_active_user), 
+    db: Session = Depends(get_db)
+):
+    """Change current user's password"""
+    current_password = password_data.get("current_password")
+    new_password = password_data.get("new_password")
+    
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Current password and new password are required")
+    
+    # Verify current password
+    if not current_user.verify_password(current_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    current_user.hashed_password = User.hash_password(new_password)
+    db.commit()
+    
+    return {"message": "Password changed successfully"}
+
+# Configuration endpoints
+@app.get("/config/user-management")
+async def get_user_management_config():
+    """Get user management configuration - whether it's externally managed"""
+    return {
+        "external_user_management": EXTERNAL_USER_MANAGEMENT,
+        "description": "Whether user management is handled by external systems (e.g., aMember)"
+    }
 
 # Dashboard endpoints
 @app.get("/dashboard/stats", response_model=DashboardStats)
@@ -458,18 +525,31 @@ async def get_inmates(
         })
         enhancement_data = enhancement_result.fetchone()
         
-        # Determine actual status with null checks
+        # Determine actual status based on this individual record's release_date
+        inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
+        
+        # Get enhanced info for this person (for metadata only, not status)
+        enhancement_query = text("""
+            SELECT COUNT(*) as total_records,
+                   MIN(in_custody_date) as first_booking,
+                   MAX(in_custody_date) as latest_booking
+            FROM inmates 
+            WHERE name = :name AND dob = :dob AND jail_id = :jail_id
+        """)
+        
+        enhancement_result = db.execute(enhancement_query, {
+            'name': row.name,
+            'dob': row.dob,
+            'jail_id': row.jail_id
+        })
+        enhancement_data = enhancement_result.fetchone()
+        
+        # Add enhanced metadata fields
         if enhancement_data:
-            has_release = enhancement_data.all_releases and enhancement_data.all_releases.strip()
-            actual_status = 'released' if has_release else 'in_custody'
-            
-            # Add enhanced fields
-            inmate_dict['actual_status'] = actual_status
             inmate_dict['total_records'] = enhancement_data.total_records
             inmate_dict['first_booking_date'] = format_date_only(enhancement_data.first_booking)
         else:
             # Fallback if query fails
-            inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
             inmate_dict['total_records'] = 1
             inmate_dict['first_booking_date'] = format_date_only(row.in_custody_date)
         
@@ -563,7 +643,7 @@ async def get_inmate(
     })
     enhancement_data = enhancement_result.fetchone()
     
-    # Always use the individual record's release_date for status determination
+    # Use individual record's release_date for status determination
     inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
     
     if enhancement_data:
@@ -800,6 +880,13 @@ async def generate_user_api_key(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Check if user has API access
+    if not user.has_group("api"):
+        raise HTTPException(
+            status_code=403, 
+            detail="User must be in 'api' group to receive API keys"
+        )
+    
     # Generate new API key
     import secrets
     import string
@@ -815,6 +902,35 @@ async def generate_user_api_key(
         "message": "API key generated successfully",
         "user_id": user.id,
         "username": user.username,
+        "api_key": new_api_key
+    }
+
+@app.post("/my/generate-api-key")
+async def generate_my_api_key(
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """Generate a new API key for the current user"""
+    # Check if user has API access
+    if not current_user.has_group("api"):
+        raise HTTPException(
+            status_code=403, 
+            detail="You must be in the 'api' group to request API keys. Please contact an administrator."
+        )
+    
+    # Generate new API key
+    import secrets
+    import string
+    alphabet = string.ascii_letters + string.digits
+    new_api_key = ''.join(secrets.choice(alphabet) for _ in range(32))
+    
+    # Update user with new API key
+    current_user.api_key = new_api_key
+    db.commit()
+    db.refresh(current_user)
+    
+    return {
+        "message": "API key generated successfully",
         "api_key": new_api_key
     }
 
@@ -1220,6 +1336,14 @@ async def delete_monitor_inmate_link(
     return {"message": "Link deleted successfully"}
 
 
+# Configuration Endpoints
+
+@app.get("/config/external-user-management")
+async def get_external_user_management_config():
+    """Get external user management configuration (public endpoint)."""
+    return {"external_user_management": EXTERNAL_USER_MANAGEMENT}
+
+
 # Group Management Endpoints
 
 @app.get("/groups")
@@ -1331,11 +1455,22 @@ async def create_amember_user(user_data: AmemberUserCreate, db: Session = Depend
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
     
+    # Determine password hash - either use provided hash or hash the provided password
+    if user_data.password_hash:
+        # Use the provided password hash directly (from aMember)
+        password_hash = user_data.password_hash
+    elif user_data.password:
+        # Hash the provided plaintext password
+        password_hash = User.hash_password(user_data.password)
+    else:
+        raise HTTPException(status_code=400, detail="Either password or password_hash must be provided")
+    
     # Create new user
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=User.hash_password(user_data.password),
+        hashed_password=password_hash,
+        amember_user_id=user_data.amember_user_id,
         is_active=user_data.is_active
     )
     

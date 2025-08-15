@@ -12,6 +12,7 @@ import InmateDetailPage from './pages/InmateDetailPage';
 import MonitorsPage from './pages/MonitorsPage';
 import MonitorDetailPage from './pages/MonitorDetailPage';
 import UsersPage from './pages/UsersPage';
+import UserProfilePage from './pages/UserProfilePage';
 
 const theme = createTheme({
   palette: {
@@ -48,6 +49,7 @@ function App() {
               <Route path="monitors" element={<MonitorsPage />} />
               <Route path="monitors/:id" element={<MonitorDetailPage />} />
               <Route path="users" element={<UsersPage />} />
+              <Route path="profile" element={<UserProfilePage />} />
             </Route>
           </Routes>
         </Router>

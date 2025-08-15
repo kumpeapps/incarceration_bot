@@ -2,7 +2,14 @@
 /**
  * aMember Plugin for Incarceration Bot User Management
  * 
- * This plugin synchronizes aMember user accounts and groups with the Incarceration Bot system.
+ * This plugin synchronizes aMember user accounts and groups w        // Create user in Incarceration Bot using aMember's hashed password
+        $userData = [
+            'username' => $user->login,
+            'email' => $user->email,
+            'password_hash' => $user->pass,  // Use aMember's hashed password directly
+            'amember_user_id' => $user->user_id,
+            'is_active' => true
+        ];Incarceration Bot system.
  * It handles user creation, updates, and group assignments based on aMember product subscriptions.
  * 
  * @package aMember_Plugin_IncarcerationBot
@@ -65,13 +72,35 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             ->loadOptions([
                 'user' => 'Regular User',
                 'admin' => 'Administrator',
-                'moderator' => 'Moderator'
+                'moderator' => 'Moderator',
+                'guest' => 'Guest',
+                'locked' => 'Locked User'
             ])
             ->setValue('user');
             
         $form->addAdvCheckbox('debug_mode')
             ->setLabel('Debug Mode')
             ->addRule('required');
+            
+        $form->addStatic()
+            ->setContent('<div class="am-info">
+                <strong>Password Management:</strong><br/>
+                • Initial passwords are set to "AMEMBER_MANAGED" for security<br/>
+                • Users should use aMember for login and password management<br/>
+                • Consider implementing SSO for seamless user experience
+            </div>');
+            
+        $form->addStatic()
+            ->setContent('<div class="am-info">
+                <strong>Password Management:</strong><br/>
+                • User passwords are automatically synchronized using aMember\'s bcrypt hashes<br/>
+                • Users can login to Incarceration Bot with their aMember passwords<br/>
+                • No additional password management required<br/><br/>
+                <strong>Group Management Notes:</strong><br/>
+                • The "locked" group is automatically managed based on aMember user lock status<br/>
+                • The "banned" group is reserved for manual administration and will not be modified by this plugin<br/>
+                • Users in the "banned" group will not have their lock status changed
+            </div>');
             
         $group = $form->addGroup('product_mapping')
             ->setLabel('Product to Group Mapping');
@@ -81,7 +110,7 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             
         $group->addTextarea('mapping', array('class' => 'am-el-wide', 'rows' => 10))
             ->setLabel('Product Mappings')
-            ->setValue("# Example mappings:\n# 1=user\n# 2=admin\n# 3=moderator");
+            ->setValue("# Example mappings:\n# 1=user\n# 2=admin\n# 3=moderator\n# 4=guest\n# Note: 'locked' and 'banned' groups are managed automatically");
     }
     
     /**
@@ -92,11 +121,11 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         $user = $event->getUser();
         $this->logDebug("User created: " . $user->login);
         
-        // Create user in Incarceration Bot
+        // Create user in Incarceration Bot using aMember's hashed password
         $userData = [
             'username' => $user->login,
             'email' => $user->email,
-            'password' => $this->generateRandomPassword(),
+            'password_hash' => $user->pass,  // Use aMember's hashed password directly
             'amember_user_id' => $user->user_id,
             'is_active' => true
         ];
@@ -106,9 +135,15 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         if ($response && isset($response['id'])) {
             $this->logDebug("User created successfully in Incarceration Bot: " . $response['id']);
             
-            // Assign default group
+            // Assign default group first
             $defaultGroup = $this->getConfig('default_group', 'user');
             $this->assignUserToGroup($response['id'], $defaultGroup);
+            
+            // Handle initial lock status if user is created as locked
+            if ($user->is_locked) {
+                $this->assignUserToGroupByAmemberId($user->user_id, 'locked');
+                $this->logDebug("User {$user->user_id} created as locked, assigned to locked group");
+            }
         } else {
             $this->logError("Failed to create user in Incarceration Bot for: " . $user->login);
         }
@@ -131,7 +166,10 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         
         $response = $this->apiRequest('PUT', '/users/amember/' . $user->user_id, $userData);
         
-        if (!$response) {
+        if ($response) {
+            // Handle locked status - only if user is not banned
+            $this->handleUserLockStatus($user->user_id, $user->is_locked);
+        } else {
             $this->logError("Failed to update user in Incarceration Bot for: " . $user->login);
         }
     }
@@ -188,6 +226,45 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
+    /**
+     * Handle user lock status without affecting banned users
+     */
+    private function handleUserLockStatus($amemberUserId, $isLocked)
+    {
+        // First check if user is banned - if so, don't touch their groups
+        $userInfoResponse = $this->apiRequest('GET', "/users/amember/{$amemberUserId}");
+        if (!$userInfoResponse) {
+            $this->logError("Could not retrieve user info for lock status check: {$amemberUserId}");
+            return;
+        }
+        
+        // Check if user is in banned group - if so, skip lock management
+        $userGroups = isset($userInfoResponse['groups']) ? $userInfoResponse['groups'] : [];
+        $isBanned = false;
+        foreach ($userGroups as $group) {
+            if (isset($group['name']) && $group['name'] === 'banned') {
+                $isBanned = true;
+                break;
+            }
+        }
+        
+        if ($isBanned) {
+            $this->logDebug("User {$amemberUserId} is banned, skipping lock status management");
+            return;
+        }
+        
+        // Manage locked group assignment
+        if ($isLocked) {
+            // Add user to locked group
+            $this->assignUserToGroupByAmemberId($amemberUserId, 'locked');
+            $this->logDebug("Added user {$amemberUserId} to locked group");
+        } else {
+            // Remove user from locked group
+            $this->removeUserFromGroupByAmemberId($amemberUserId, 'locked');
+            $this->logDebug("Removed user {$amemberUserId} from locked group");
+        }
+    }
+
     /**
      * Make API request to Incarceration Bot
      */
@@ -330,9 +407,9 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         
         return false;
     }
-    
+
     /**
-     * Generate random password for new users
+     * Generate random password for new users (legacy - now using password hashes directly)
      */
     private function generateRandomPassword($length = 16)
     {

@@ -155,9 +155,22 @@ execute_sql_if_condition(
 
 Since this project uses Docker containers, remember:
 
-1. Migration file changes require rebuilding the container: `docker-compose build backend_api`
-2. Always test migrations after rebuilding containers
-3. The `init_db.py` script may create tables before migrations run - this is expected and handled by the idempotent system
+1. **CRITICAL**: When making code changes that affect the API, always rebuild with no cache: `docker-compose build --no-cache backend_api`
+2. Regular builds (`docker-compose build backend_api`) may use cached layers and not include your latest code changes
+3. After making ANY code changes to backend files, always use `--no-cache` to ensure changes are applied
+4. Migration file changes require rebuilding the container: `docker-compose build --no-cache backend_api`
+5. Always test migrations after rebuilding containers
+6. The `init_db.py` script may create tables before migrations run - this is expected and handled by the idempotent system
+
+## Troubleshooting Login Issues
+
+If users report "username password incorrect" errors:
+
+1. **First check for syntax errors** in the API code that could cause 500 errors
+2. **Rebuild with no cache**: `docker-compose build --no-cache backend_api && docker-compose up -d backend_api`
+3. Test login directly: `docker exec -it incarceration_bot-backend_api-1 python -c "import requests; response = requests.post('http://localhost:8000/auth/login', json={'username': 'admin', 'password': 'admin123'}); print(f'Status: {response.status_code}, Response: {response.text}')"`
+4. Check container logs: `docker logs incarceration_bot-backend_api-1 --tail=50`
+5. Verify user exists in database: `docker exec -it incarceration_bot-backend_api-1 python -c "from models.User import User; import database_connect as db; session = db.new_session(); admin = session.query(User).filter(User.username == 'admin').first(); print(f'Admin exists: {admin is not None}'); session.close()"`
 
 ## Error Recovery
 

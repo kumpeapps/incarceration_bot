@@ -260,3 +260,26 @@ def merge_heads_safely(allow_auto_merge=False):
     except Exception as e:
         print(f"Failed to merge heads: {e}")
         return False
+
+
+def safe_add_index(table_name, index_name, columns, **kwargs):
+    """Safely add an index only if it doesn't exist"""
+    if not index_exists(table_name, index_name):
+        print(f"Adding index {index_name} to {table_name}")
+        op.create_index(index_name, table_name, columns, **kwargs)
+        return True
+    else:
+        print(f"Index {index_name} already exists on {table_name}, skipping")
+        return False
+
+
+def safe_execute(sql_statement):
+    """Safely execute a SQL statement with error handling"""
+    try:
+        connection = op.get_bind()
+        print(f"Executing: {sql_statement}")
+        connection.execute(text(sql_statement))
+        return True
+    except Exception as e:
+        print(f"Failed to execute SQL: {sql_statement}, Error: {e}")
+        return False

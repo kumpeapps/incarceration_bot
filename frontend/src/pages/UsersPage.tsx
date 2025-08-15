@@ -19,12 +19,13 @@ import {
   DialogActions,
   TextField,
   FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   IconButton,
   Tooltip,
   Grid,
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
+  FormLabel,
 } from '@mui/material';
 import {
   Add,
@@ -34,23 +35,27 @@ import {
   Person,
   Key,
   ContentCopy,
+  Block,
+  Lock,
 } from '@mui/icons-material';
 import { apiService } from '../services/api';
-import { User } from '../types';
+import { User, Group } from '../types';
 
 interface UserFormData {
   username: string;
   email: string;
   password: string;
-  role: 'admin' | 'user';
+  groups: string[]; // Array of group names
 }
 
 const UsersPage: React.FC = () => {
   // For now, assume admin access - in real app, get from auth context
   const [currentUser] = useState({ id: 1, role: 'admin' });
   const [users, setUsers] = useState<User[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [externalUserManagement, setExternalUserManagement] = useState(false);
   
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -59,7 +64,7 @@ const UsersPage: React.FC = () => {
     username: '',
     email: '',
     password: '',
-    role: 'user',
+    groups: [],
   });
   const [formLoading, setFormLoading] = useState(false);
 
@@ -74,11 +79,13 @@ const UsersPage: React.FC = () => {
 
   useEffect(() => {
     if (!isAdmin) {
-      setError('Access denied. Admin privileges required.');
+      setError('You do not have permission to view this page');
       setLoading(false);
       return;
     }
     fetchUsers();
+    fetchGroups();
+    fetchUserManagementConfig();
   }, [isAdmin]);
 
   const fetchUsers = async () => {
@@ -95,6 +102,26 @@ const UsersPage: React.FC = () => {
     }
   };
 
+  const fetchGroups = async () => {
+    try {
+      const groupList = await apiService.getGroups();
+      setAvailableGroups(groupList);
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+    }
+  };
+
+  const fetchUserManagementConfig = async () => {
+    try {
+      const config = await apiService.getUserManagementConfig();
+      setExternalUserManagement(config.external_user_management);
+    } catch (err) {
+      console.error('Failed to fetch user management config:', err);
+      // Default to false if config fetch fails
+      setExternalUserManagement(false);
+    }
+  };
+
   const handleOpenDialog = (userToEdit?: User) => {
     if (userToEdit) {
       setEditingUser(userToEdit);
@@ -102,7 +129,7 @@ const UsersPage: React.FC = () => {
         username: userToEdit.username,
         email: userToEdit.email,
         password: '', // Don't pre-fill password for editing
-        role: userToEdit.role,
+        groups: userToEdit.groups?.map(g => g.name) || [],
       });
     } else {
       setEditingUser(null);
@@ -110,7 +137,7 @@ const UsersPage: React.FC = () => {
         username: '',
         email: '',
         password: '',
-        role: 'user',
+        groups: ['user'], // Default to 'user' group for new users
       });
     }
     setDialogOpen(true);
@@ -123,7 +150,7 @@ const UsersPage: React.FC = () => {
       username: '',
       email: '',
       password: '',
-      role: 'user',
+      groups: ['user'],
     });
   };
 
@@ -132,17 +159,51 @@ const UsersPage: React.FC = () => {
       setFormLoading(true);
       
       if (editingUser) {
-        // For editing, only send fields that are not empty
-        const updateData: Partial<User> = {
+        // For editing, update user basic info first
+        const updateData: any = {
           username: formData.username,
           email: formData.email,
-          role: formData.role,
         };
+        
+        // Only include password if it's provided
+        if (formData.password) {
+          updateData.password = formData.password;
+        }
+        
         await apiService.updateUser(editingUser.id, updateData);
+        
+        // Handle group changes separately
+        const currentGroups = editingUser.groups?.map(g => g.name) || [];
+        const newGroups = formData.groups;
+        
+        // Add new groups
+        for (const group of newGroups) {
+          if (!currentGroups.includes(group)) {
+            try {
+              await apiService.addUserToGroup(editingUser.id, group);
+            } catch (err) {
+              console.error(`Failed to add user to group ${group}:`, err);
+            }
+          }
+        }
+        
+        // Remove old groups
+        for (const group of currentGroups) {
+          if (!newGroups.includes(group)) {
+            try {
+              await apiService.removeUserFromGroup(editingUser.id, group);
+            } catch (err) {
+              console.error(`Failed to remove user from group ${group}:`, err);
+            }
+          }
+        }
       } else {
         await apiService.createUser({
-          ...formData,
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
           is_active: true,
+          groups: formData.groups,
         });
       }
       
@@ -206,14 +267,53 @@ const UsersPage: React.FC = () => {
     }
   };
 
-  const getRoleChip = (role: string) => {
+  const getGroupsChips = (groups?: Array<{name: string; description?: string}>) => {
+    if (!groups || groups.length === 0) {
+      return <Chip label="No groups" size="small" variant="outlined" />;
+    }
+
+    const getGroupColor = (groupName: string) => {
+      switch (groupName) {
+        case 'admin': return 'primary';
+        case 'moderator': return 'secondary';
+        case 'api': return 'info';
+        case 'banned': return 'error';
+        case 'locked': return 'warning';
+        default: return 'default';
+      }
+    };
+
+    const getGroupIcon = (groupName: string) => {
+      switch (groupName) {
+        case 'admin': return <AdminPanelSettings />;
+        case 'api': return <Key />;
+        case 'banned': return <Block />;
+        case 'locked': return <Lock />;
+        default: return <Person />;
+      }
+    };
+
     return (
-      <Chip
-        icon={role === 'admin' ? <AdminPanelSettings /> : <Person />}
-        label={role === 'admin' ? 'Administrator' : 'User'}
-        color={role === 'admin' ? 'primary' : 'default'}
-        size="small"
-      />
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+        {groups.slice(0, 3).map((group) => (
+          <Chip
+            key={group.name}
+            label={group.name}
+            size="small"
+            icon={getGroupIcon(group.name)}
+            color={getGroupColor(group.name) as any}
+            variant="outlined"
+          />
+        ))}
+        {groups.length > 3 && (
+          <Chip
+            label={`+${groups.length - 3} more`}
+            size="small"
+            variant="outlined"
+            color="default"
+          />
+        )}
+      </Box>
     );
   };
 
@@ -258,6 +358,75 @@ const UsersPage: React.FC = () => {
     );
   }
 
+  if (externalUserManagement) {
+    return (
+      <Box>
+        <Typography variant="h4" component="h1" gutterBottom>
+          User Management
+        </Typography>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          User management is handled by an external system (e.g., aMember). 
+          User accounts are automatically synchronized and cannot be managed through this interface.
+          API integrations and backend services continue to function normally.
+        </Alert>
+        
+        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+          Current Users ({users.length})
+        </Typography>
+        
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Username</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Groups</TableCell>
+                <TableCell>Created</TableCell>
+                <TableCell>Last Login</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    <Typography color="textSecondary">
+                      No users found
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                users.map((userItem) => (
+                  <TableRow key={userItem.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" color="textSecondary">
+                        {userItem.id}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="medium">
+                        {userItem.username}
+                        {userItem.id === currentUser?.id && (
+                          <Chip label="You" size="small" sx={{ ml: 1 }} />
+                        )}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{userItem.email}</TableCell>
+                    <TableCell>{getGroupsChips(userItem.groups)}</TableCell>
+                    <TableCell>{formatDate(userItem.created_at)}</TableCell>
+                    <TableCell>
+                      {userItem.last_login ? formatDate(userItem.last_login) : 'Never'}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -268,10 +437,17 @@ const UsersPage: React.FC = () => {
           variant="contained"
           startIcon={<Add />}
           onClick={() => handleOpenDialog()}
+          disabled={externalUserManagement}
         >
           Add User
         </Button>
       </Box>
+
+      {externalUserManagement && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          User management is handled by an external system. Some actions are disabled.
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -291,7 +467,7 @@ const UsersPage: React.FC = () => {
               <TableCell>ID</TableCell>
               <TableCell>Username</TableCell>
               <TableCell>Email</TableCell>
-              <TableCell>Role</TableCell>
+              <TableCell>Groups</TableCell>
               <TableCell>Created</TableCell>
               <TableCell>Last Login</TableCell>
               <TableCell align="right">Actions</TableCell>
@@ -323,36 +499,48 @@ const UsersPage: React.FC = () => {
                     </Typography>
                   </TableCell>
                   <TableCell>{userItem.email}</TableCell>
-                  <TableCell>{getRoleChip(userItem.role)}</TableCell>
+                  <TableCell>{getGroupsChips(userItem.groups)}</TableCell>
                   <TableCell>{formatDate(userItem.created_at)}</TableCell>
                   <TableCell>
                     {userItem.last_login ? formatDate(userItem.last_login) : 'Never'}
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title="Edit">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleOpenDialog(userItem)}
-                      >
-                        <Edit />
-                      </IconButton>
+                    <Tooltip title={externalUserManagement ? "Disabled - External user management" : "Edit"}>
+                      <span>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleOpenDialog(userItem)}
+                          disabled={externalUserManagement}
+                        >
+                          <Edit />
+                        </IconButton>
+                      </span>
                     </Tooltip>
-                    <Tooltip title="Generate API Key">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleGenerateApiKey(userItem)}
-                        color="primary"
-                      >
-                        <Key />
-                      </IconButton>
+                    <Tooltip title={externalUserManagement ? "Disabled - External user management" : "Generate API Key"}>
+                      <span>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleGenerateApiKey(userItem)}
+                          color="primary"
+                          disabled={externalUserManagement}
+                        >
+                          <Key />
+                        </IconButton>
+                      </span>
                     </Tooltip>
-                    <Tooltip title={userItem.id === currentUser?.id ? "Cannot delete your own account" : "Delete"}>
+                    <Tooltip title={
+                      externalUserManagement 
+                        ? "Disabled - External user management" 
+                        : userItem.id === currentUser?.id 
+                          ? "Cannot delete your own account" 
+                          : "Delete"
+                    }>
                       <span>
                         <IconButton 
                           size="small" 
                           onClick={() => handleDelete(userItem)} 
                           color="error"
-                          disabled={userItem.id === currentUser?.id}
+                          disabled={externalUserManagement || userItem.id === currentUser?.id}
                         >
                           <Delete />
                         </IconButton>
@@ -406,16 +594,43 @@ const UsersPage: React.FC = () => {
               />
             </Grid>
             <Grid item xs={12}>
-              <FormControl fullWidth required>
-                <InputLabel>Role</InputLabel>
-                <Select
-                  value={formData.role}
-                  label="Role"
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'user' })}
-                >
-                  <MenuItem value="user">User</MenuItem>
-                  <MenuItem value="admin">Administrator</MenuItem>
-                </Select>
+              <FormControl fullWidth>
+                <FormLabel component="legend">Groups</FormLabel>
+                <FormGroup>
+                  {availableGroups.map((group) => (
+                    <FormControlLabel
+                      key={group.id}
+                      control={
+                        <Checkbox
+                          checked={formData.groups.includes(group.name)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({ 
+                                ...formData, 
+                                groups: [...formData.groups, group.name] 
+                              });
+                            } else {
+                              setFormData({ 
+                                ...formData, 
+                                groups: formData.groups.filter(g => g !== group.name) 
+                              });
+                            }
+                          }}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2">{group.display_name}</Typography>
+                          {group.description && (
+                            <Typography variant="caption" color="textSecondary">
+                              {group.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  ))}
+                </FormGroup>
               </FormControl>
             </Grid>
           </Grid>

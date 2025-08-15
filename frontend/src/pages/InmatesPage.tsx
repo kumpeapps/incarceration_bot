@@ -133,7 +133,7 @@ const InmatesPage: React.FC = () => {
   };
 
     const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'Unknown';
+    if (!dateStr || dateStr === '' || dateStr === 'Unknown') return 'N/A';
     
     try {
       // Handle YYYY-MM-DD format without timezone conversion
@@ -145,7 +145,17 @@ const InmatesPage: React.FC = () => {
         
         // Create date with explicit timezone-neutral values
         const date = new Date(year, month - 1, day);
-        return date.toLocaleDateString();
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          return 'N/A';
+        }
+        
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
       }
       
       // Handle other formats with time component
@@ -157,9 +167,19 @@ const InmatesPage: React.FC = () => {
         // Date-only string, add local time component
         date = new Date(dateStr + 'T12:00:00');
       }
-      return date.toLocaleDateString();
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'N/A';
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
     } catch {
-      return dateStr;
+      return 'N/A';
     }
   };
 
@@ -191,9 +211,16 @@ const InmatesPage: React.FC = () => {
   };
 
   const getStatusChip = (inmate: Inmate) => {
-    // Use exact same logic as detail page for consistency
-    const releaseDate = formatDate(inmate.release_date);
-    const isInCustody = releaseDate === 'N/A';
+    // Prioritize actual_status if available, otherwise use release_date logic
+    let isInCustody: boolean;
+    
+    if (inmate.actual_status) {
+      isInCustody = inmate.actual_status === 'in_custody';
+    } else {
+      // Fallback to release date logic for consistency with detail page
+      const releaseDate = formatDate(inmate.release_date);
+      isInCustody = releaseDate === 'N/A';
+    }
     
     const statusLabel = isInCustody ? 'In Custody' : 'Released';
     const statusColor = isInCustody ? 'error' : 'success';
