@@ -345,9 +345,12 @@ def get_api_authenticated_user(credentials: HTTPAuthorizationCredentials = Depen
 @app.post("/auth/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == login_data.username).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    
     # Verify password using the stored password format
     password_format = getattr(user, 'password_format', 'bcrypt')
-    if not user or not user.verify_password_with_format(login_data.password, password_format):
+    if not user.verify_password_with_format(login_data.password, password_format):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
     # Check if user is banned
@@ -1506,8 +1509,19 @@ async def create_amember_user(user_data: AmemberUserCreate, current_user = Depen
     # Determine password hash - either use provided hash or hash the provided password
     if user_data.hashed_password:
         # Use the provided password hash directly (from aMember)
-        password_hash = user_data.hashed_password
         password_format = user_data.password_format or "bcrypt"
+        
+        # Validate hash format consistency
+        from utils.password_utils import validate_password_format, PasswordFormatError
+        try:
+            validate_password_format(user_data.hashed_password, password_format)
+        except PasswordFormatError as e:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Provided hashed_password does not match specified format '{password_format}': {e}"
+            ) from e
+        
+        password_hash = user_data.hashed_password
     elif user_data.password:
         # Hash the provided plaintext password
         password_hash = User.hash_password(user_data.password)

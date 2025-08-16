@@ -32,8 +32,10 @@ def test_password_formats():
     print(f"   Hash: {bcrypt_hash}")
     print(f"   Verification: {'✅ PASS' if result else '❌ FAIL'}")
     
-    # Test 2: MD5 format (simple hash)
-    print("\n2. Testing MD5 format...")
+    # Test 2: MD5 format (simple hash) - DEPRECATED AND INSECURE
+    print("\n2. Testing MD5 format (DEPRECATED - INSECURE)...")
+    print("   ⚠️  WARNING: MD5 is cryptographically broken and should not be used for passwords!")
+    print("   ⚠️  This test is for legacy compatibility only.")
     md5_hash = hashlib.md5(test_password.encode()).hexdigest()
     user.hashed_password = md5_hash
     user.password_format = "md5"
@@ -41,8 +43,10 @@ def test_password_formats():
     print(f"   Hash: {md5_hash}")
     print(f"   Verification: {'✅ PASS' if result else '❌ FAIL'}")
     
-    # Test 3: SHA1 format
-    print("\n3. Testing SHA1 format...")
+    # Test 3: SHA1 format - DEPRECATED AND INSECURE
+    print("\n3. Testing SHA1 format (DEPRECATED - INSECURE)...")
+    print("   ⚠️  WARNING: SHA1 is cryptographically broken and should not be used for passwords!")
+    print("   ⚠️  This test is for legacy compatibility only.")
     sha1_hash = hashlib.sha1(test_password.encode()).hexdigest()
     user.hashed_password = sha1_hash
     user.password_format = "sha1"

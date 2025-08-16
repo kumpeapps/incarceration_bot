@@ -182,15 +182,19 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             return 'crypt';
         }
         
+        // MD5 format (32 hex chars) - DEPRECATED
         if (preg_match('/^[a-fA-F0-9]{32}$/', $password)) {
+            $this->debugLog("WARNING: MD5 password format detected - this is insecure and deprecated");
             return 'md5';
         }
         
+        // SHA1 format (40 hex chars) - DEPRECATED
         if (preg_match('/^[a-fA-F0-9]{40}$/', $password)) {
+            $this->debugLog("WARNING: SHA1 password format detected - this is insecure and deprecated");
             return 'sha1';
         }
         
-        // Default to phpass for aMember
+        // Default to phpass for aMember (most common)
         return 'phpass';
     }
     
