@@ -1,5 +1,17 @@
 <?php
 
+/**
+ * DEPRECATED: This file is deprecated in favor of incarceration-bot-consolidated.php
+ * 
+ * This simple plugin version lacks:
+ * - Product-to-group mapping
+ * - Complete user lifecycle event handling
+ * - Access control integration
+ * - Proper validation and error logging
+ * 
+ * Please use incarceration-bot-consolidated.php instead.
+ */
+
 if (!defined('AM_APPLICATION_PATH')) {
     die('Direct access not allowed');
 }

@@ -1,4 +1,22 @@
 <?php
+
+/**
+ * aMember Plugin for Incarceration Bot Integration
+ * 
+ * This is the consolidated, production-ready plugin that provides:
+ * - Complete user synchronization (create, update, delete)
+ * - Product-to-group mapping with validation
+ * - Access control integration
+ * - Comprehensive error logging and debugging
+ * - Malformed mapping validation with detailed error messages
+ * 
+ * Version: 1.0.0
+ * Author: Incarceration Bot Development Team
+ */
+
+if (!defined('AM_APPLICATION_PATH')) {
+    die('Direct access not allowed');
+}
 if (!defined('AM_APPLICATION_PATH')) {
     die('Direct access not allowed');
 }
@@ -261,7 +279,7 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         $mappings = array();
         
         $lines = explode("\n", $mappingString);
-        foreach ($lines as $line) {
+        foreach ($lines as $lineNumber => $line) {
             $line = trim($line);
             if (empty($line) || strpos($line, '#') === 0) {
                 continue;
@@ -269,7 +287,25 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             
             if (strpos($line, '=') !== false) {
                 list($productId, $groupName) = explode('=', $line, 2);
-                $mappings[trim($productId)] = trim($groupName);
+                $productId = trim($productId);
+                $groupName = trim($groupName);
+                
+                // Validate product ID is numeric
+                if (!is_numeric($productId)) {
+                    $this->logError("Invalid product mapping on line " . ($lineNumber + 1) . ": Product ID must be numeric. Found: '$productId'");
+                    continue;
+                }
+                
+                // Validate group name is not empty
+                if (empty($groupName)) {
+                    $this->logError("Invalid product mapping on line " . ($lineNumber + 1) . ": Group name cannot be empty. Found: '$line'");
+                    continue;
+                }
+                
+                $mappings[$productId] = $groupName;
+            } else {
+                // Log malformed lines that don't contain '='
+                $this->logError("Malformed product mapping on line " . ($lineNumber + 1) . ": Expected format 'product_id=group_name'. Found: '$line'");
             }
         }
         

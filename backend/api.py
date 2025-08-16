@@ -25,6 +25,7 @@ from models.Group import Group
 from models.UserGroup import UserGroup
 from models.Session import Session as UserSession
 from helpers.user_group_service import UserGroupService
+from utils.master_user import MasterUser
 import database_connect as db
 
 app = FastAPI(title="Incarceration Bot API", version="1.0.0")
@@ -299,44 +300,28 @@ def can_manage_resource(current_user: User, resource_user_id: int) -> bool:
     # Users can only manage their own resources
     return current_user.id == resource_user_id
 
+def check_integration_permissions(current_user):
+    """Check if user has permissions for integration endpoints (admin or master API key)."""
+    # Master API key has full permissions
+    if isinstance(current_user, MasterUser):
+        return True
+    
+    # Regular users must be admin for integration endpoints
+    if not current_user.is_admin():
+        raise HTTPException(
+            status_code=403, 
+            detail="Integration endpoints require admin privileges or master API key authentication"
+        )
+    
+    return True
+
 def get_api_authenticated_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     """Allow authentication via JWT token or master API key - for external integrations like aMember."""
     token = credentials.credentials
     
     # Check if it's the master API key
     if MASTER_API_KEY and token == MASTER_API_KEY:
-        # Create a virtual admin user for master API key access
-        class MasterUser:
-            id = 0
-            username = "api_integration"
-            email = "api@system.local"
-            is_active = True
-            api_key = MASTER_API_KEY
-            
-            def is_admin(self):
-                return True
-            
-            def has_group(self, group_name):
-                return True  # Master key has all permissions
-            
-            def get_groups(self):
-                return ["admin"]
-            
-            @property
-            def role(self):
-                return "admin"
-            
-            def to_dict(self):
-                return {
-                    "id": self.id,
-                    "username": self.username,
-                    "email": self.email,
-                    "is_active": self.is_active,
-                    "role": self.role,
-                    "groups": [{"name": "admin", "display_name": "Administrators"}]
-                }
-        
-        return MasterUser()
+        return MasterUser(token)
     
     # Otherwise, use regular JWT authentication
     try:
@@ -1503,7 +1488,8 @@ async def get_group_users(group_name: str, current_user: User = Depends(get_curr
 @app.post("/users/amember")
 async def create_amember_user(user_data: AmemberUserCreate, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Create a user from aMember (API key auth)."""
-    # Note: This endpoint should be protected by API key authentication in production
+    # Check integration permissions
+    check_integration_permissions(current_user)
     
     # Check if user already exists by aMember ID
     existing_user = db.query(User).filter(User.username == user_data.username).first()
@@ -1543,7 +1529,8 @@ async def create_amember_user(user_data: AmemberUserCreate, current_user = Depen
 @app.put("/users/amember/{amember_user_id}")
 async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Update a user from aMember (API key auth)."""
-    # Note: This endpoint should be protected by API key authentication in production
+    # Check integration permissions
+    check_integration_permissions(current_user)
     
     # Find user by username (you may need to add amember_user_id column for better tracking)
     user = db.query(User).filter(User.username == user_data.username).first()
@@ -1565,7 +1552,8 @@ async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate
 @app.delete("/users/amember/{amember_user_id}")
 async def delete_amember_user(amember_user_id: int, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Deactivate a user from aMember (API key auth)."""
-    # Note: This endpoint should be protected by API key authentication in production
+    # Check integration permissions
+    check_integration_permissions(current_user)
     
     # For now, we'll deactivate rather than delete to preserve data integrity
     # You may need to add amember_user_id column for better tracking
@@ -1576,7 +1564,8 @@ async def delete_amember_user(amember_user_id: int, current_user = Depends(get_a
 @app.get("/users/amember/{amember_user_id}")
 async def get_amember_user(amember_user_id: int, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Get user information by aMember user ID (API key auth)."""
-    # Note: This endpoint should be protected by API key authentication in production
+    # Check integration permissions
+    check_integration_permissions(current_user)
     
     # Find user by amember_user_id
     user = db.query(User).filter(User.amember_user_id == amember_user_id).first()
@@ -1589,7 +1578,8 @@ async def get_amember_user(amember_user_id: int, current_user = Depends(get_api_
 @app.post("/users/amember/{amember_user_id}/groups")
 async def assign_amember_user_to_group(amember_user_id: int, group_data: UserGroupAssign, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Assign aMember user to group (API key auth)."""
-    # Note: This endpoint should be protected by API key authentication in production
+    # Check integration permissions
+    check_integration_permissions(current_user)
     # You may need to add amember_user_id column for better tracking
     
     # This is a placeholder implementation
@@ -1599,7 +1589,8 @@ async def assign_amember_user_to_group(amember_user_id: int, group_data: UserGro
 @app.delete("/users/amember/{amember_user_id}/groups/{group_name}")
 async def remove_amember_user_from_group(amember_user_id: int, group_name: str, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Remove aMember user from group (API key auth)."""
-    # Note: This endpoint should be protected by API key authentication in production
+    # Check integration permissions
+    check_integration_permissions(current_user)
     # You may need to add amember_user_id column for better tracking
     
     # This is a placeholder implementation

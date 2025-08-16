@@ -1,5 +1,16 @@
 <?php
 
+/**
+ * DEPRECATED: This file is deprecated in favor of incarceration-bot-consolidated.php
+ * 
+ * This basic plugin version lacks:
+ * - Product-to-group mapping
+ * - User lifecycle event handling
+ * - Proper validation and error logging
+ * 
+ * Please use incarceration-bot-consolidated.php instead.
+ */
+
 class Am_Plugin_IncarcerationBot extends Am_Plugin
 {
     const PLUGIN_STATUS = self::STATUS_PRODUCTION;
