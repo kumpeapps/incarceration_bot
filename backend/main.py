@@ -8,6 +8,7 @@ import schedule
 import requests  # type: ignore
 from loguru import logger
 from sqlalchemy.orm import Session
+import models  # Import models package to register all models with SQLAlchemy
 from models.Jail import Jail, Inmate
 from scrapes.zuercher import scrape_zuercherportal
 from scrapes.crawford_so_ar import scrape_crawford_so_ar

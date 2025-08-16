@@ -9,6 +9,7 @@ from models.Jail import Jail
 from models.Monitor import Monitor
 from models.MonitorInmateLink import MonitorInmateLink
 from models.MonitorLink import MonitorLink
+from models.Session import Session
 
 # Make all models available when importing from models
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     'Jail',
     'Monitor',
     'MonitorInmateLink',
-    'MonitorLink'
+    'MonitorLink',
+    'Session'
 ]

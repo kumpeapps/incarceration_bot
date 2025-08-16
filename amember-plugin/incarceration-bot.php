@@ -39,8 +39,10 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             
         $form->addText('api_key', array('class' => 'am-el-wide'))
             ->setLabel('API Key')
-            ->setDescription('Use MASTER_API_KEY environment variable or generate from admin user in Incarceration Bot')
             ->addRule('required');
+            
+        $form->addStatic()
+            ->setContent('<div class="am-info"><strong>API Key:</strong> Use the MASTER_API_KEY environment variable value (your-master-api-key-for-integrations) or generate a new API key from an admin user in Incarceration Bot</div>');
             
         $form->addSelect('default_group')
             ->setLabel('Default Group for New Users')
@@ -57,7 +59,9 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             ->setValue('user');
             
         $form->addAdvCheckbox('sync_existing_users')
-            ->setLabel('Sync All Existing aMember Users')
-            ->setDescription('Check this to sync all existing aMember users to Incarceration Bot on first activation');
+            ->setLabel('Sync All Existing aMember Users');
+            
+        $form->addStatic()
+            ->setContent('<div class="am-info"><strong>Sync Existing Users:</strong> Check the box above to sync all existing aMember users to Incarceration Bot on first activation</div>');
     }
 }
