@@ -162,6 +162,34 @@ def ensure_critical_schema_updates():
         else:
             logger.info("✅ amember_user_id column already exists in users table")
         
+        if 'password_format' not in column_names:
+            logger.info("Adding password_format column to users table")
+            try:
+                # Use SQLAlchemy DDL operations for database agnosticism
+                from sqlalchemy import DDL
+                ddl = DDL("ALTER TABLE users ADD COLUMN password_format %(password_format_type)s NOT NULL DEFAULT 'bcrypt'")
+                
+                # Get database-specific type for VARCHAR(20)
+                dialect_name = session.bind.dialect.name
+                if dialect_name == 'mysql':
+                    password_format_type = 'VARCHAR(20)'
+                elif dialect_name == 'postgresql':
+                    password_format_type = 'VARCHAR(20)'
+                elif dialect_name == 'sqlite':
+                    password_format_type = 'VARCHAR(20)'
+                else:
+                    password_format_type = 'VARCHAR(20)'
+                
+                session.execute(ddl, {'password_format_type': password_format_type})
+                updates_applied = True
+            except OperationalError as e:
+                if 'duplicate column' in str(e).lower() or 'already exists' in str(e).lower():
+                    logger.info("✅ password_format column already exists (caught during creation)")
+                else:
+                    raise
+        else:
+            logger.info("✅ password_format column already exists in users table")
+        
         if updates_applied:
             session.commit()
             logger.info("✅ Critical schema updates applied successfully")

@@ -163,13 +163,16 @@ class AmemberUserCreate(BaseModel):
     username: str
     email: str
     password: Optional[str] = None
-    password_hash: Optional[str] = None
+    hashed_password: Optional[str] = None
+    password_format: Optional[str] = "bcrypt"
     amember_user_id: int
     is_active: bool = True
 
 class AmemberUserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
+    hashed_password: Optional[str] = None
+    password_format: Optional[str] = None
     is_active: Optional[bool] = None
 
 # Database dependency
@@ -342,7 +345,12 @@ def get_api_authenticated_user(credentials: HTTPAuthorizationCredentials = Depen
 @app.post("/auth/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == login_data.username).first()
-    if not user or not user.verify_password(login_data.password):
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    
+    # Verify password using the stored password format
+    password_format = getattr(user, 'password_format', 'bcrypt')
+    if not user.verify_password_with_format(login_data.password, password_format):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
     # Check if user is banned
@@ -418,12 +426,14 @@ async def change_password(
     if not current_password or not new_password:
         raise HTTPException(status_code=400, detail="Current password and new password are required")
     
-    # Verify current password
-    if not current_user.verify_password(current_password):
+    # Verify current password using stored format
+    password_format = getattr(current_user, 'password_format', 'bcrypt')
+    if not current_user.verify_password_with_format(current_password, password_format):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     
-    # Update password
+    # Update password (always use bcrypt for new passwords)
     current_user.hashed_password = User.hash_password(new_password)
+    current_user.password_format = "bcrypt"
     db.commit()
     
     return {"message": "Password changed successfully"}
@@ -1497,20 +1507,34 @@ async def create_amember_user(user_data: AmemberUserCreate, current_user = Depen
         raise HTTPException(status_code=400, detail="User already exists")
     
     # Determine password hash - either use provided hash or hash the provided password
-    if user_data.password_hash:
+    if user_data.hashed_password:
         # Use the provided password hash directly (from aMember)
-        password_hash = user_data.password_hash
+        password_format = user_data.password_format or "bcrypt"
+        
+        # Validate hash format consistency
+        from utils.password_utils import validate_password_format, PasswordFormatError
+        try:
+            validate_password_format(user_data.hashed_password, password_format)
+        except PasswordFormatError as e:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Provided hashed_password does not match specified format '{password_format}': {e}"
+            ) from e
+        
+        password_hash = user_data.hashed_password
     elif user_data.password:
         # Hash the provided plaintext password
         password_hash = User.hash_password(user_data.password)
+        password_format = "bcrypt"
     else:
-        raise HTTPException(status_code=400, detail="Either password or password_hash must be provided")
+        raise HTTPException(status_code=400, detail="Either password or hashed_password must be provided")
     
     # Create new user
     new_user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=password_hash,
+        password_format=password_format,
         amember_user_id=user_data.amember_user_id,
         is_active=user_data.is_active
     )
@@ -1532,8 +1556,8 @@ async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate
     # Check integration permissions
     check_integration_permissions(current_user)
     
-    # Find user by username (you may need to add amember_user_id column for better tracking)
-    user = db.query(User).filter(User.username == user_data.username).first()
+    # Find user by aMember user ID
+    user = db.query(User).filter(User.amember_user_id == amember_user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -1544,6 +1568,9 @@ async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate
         user.email = user_data.email
     if user_data.is_active is not None:
         user.is_active = user_data.is_active
+    if user_data.hashed_password:
+        user.hashed_password = user_data.hashed_password
+        user.password_format = user_data.password_format or "bcrypt"
     
     db.commit()
     return user.to_dict()

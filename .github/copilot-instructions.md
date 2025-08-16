@@ -74,8 +74,8 @@ Incarceration Bot is a Python-based web scraping and notification system that mo
   index.html         # Main HTML template
 
 /amember-plugin/
-  incarceration-bot-consolidated.php # Main aMember plugin
-  README.md          # Plugin installation instructions
+  incarceration-bot.php  # Complete aMember plugin
+  README.md             # Plugin installation instructions
 ```
 
 ## Common Patterns
@@ -116,7 +116,7 @@ def downgrade():
 ## Integration Points
 
 ### aMember Plugin
-- Located in `/amember-plugin/incarceration-bot-consolidated.php`
+- Located in `/amember-plugin/incarceration-bot.php`
 - Handles user synchronization between aMember and Incarceration Bot
 - Uses product-to-group mapping for access control
 - Validates all configuration and provides detailed error logging
