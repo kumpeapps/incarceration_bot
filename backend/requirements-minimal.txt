@@ -1,0 +1,11 @@
+# Minimal requirements for testing - use if main requirements.txt fails
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+SQLAlchemy==2.0.38
+PyMySQL==1.1.1
+alembic==1.13.1
+passlib==1.7.4
+bcrypt==3.2.2
+python-dotenv==1.0.1
+requests==2.32.4
