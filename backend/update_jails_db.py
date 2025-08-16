@@ -4,6 +4,7 @@ import json
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
+import models  # Import models package to register all models with SQLAlchemy
 from models.Jail import Jail
 from database_connect import Session as DBSession
 

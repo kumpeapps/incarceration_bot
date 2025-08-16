@@ -3,7 +3,7 @@
  * aMember Plugin for Incarceration Bot User Management
  * 
  * This plugin synchronizes aMember user accounts and groups with the Incarceration Bot system.
- * It handles user creation, updates, and group assignments based on aMember product subscriptions.
+ * Place this file in: /path/to/amember/application/default/plugins/misc/incarceration-bot.php
  * 
  * @package aMember_Plugin_IncarcerationBot
  * @version 1.0.0
@@ -62,11 +62,12 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             ->setLabel('API Base URL')
             ->addRule('required')
             ->addRule('regex', 'Please enter a valid URL', '/^https?:\/\/.+/')
-            ->setValue('https://your-domain.com/api');
+            ->setValue('http://localhost:8000/api');
             
         $form->addText('api_key', array('class' => 'am-el-wide'))
             ->setLabel('API Key')
-            ->addRule('required');
+            ->addRule('required')
+            ->setValue('your-master-api-key-for-integrations');
             
         $form->addSelect('default_group')
             ->setLabel('Default Group for New Users')
@@ -82,14 +83,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         $form->addAdvCheckbox('debug_mode')
             ->setLabel('Debug Mode')
             ->addRule('required');
-            
-        $form->addStatic()
-            ->setContent('<div class="am-info">
-                <strong>Password Management:</strong><br/>
-                • Initial passwords are set to "AMEMBER_MANAGED" for security<br/>
-                • Users should use aMember for login and password management<br/>
-                • Consider implementing SSO for seamless user experience
-            </div>');
             
         $form->addStatic()
             ->setContent('<div class="am-info">
@@ -409,15 +402,6 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         return false;
     }
 
-    /**
-     * Generate random password for new users (legacy - now using password hashes directly)
-     */
-    private function generateRandomPassword($length = 16)
-    {
-        $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-        return substr(str_shuffle(str_repeat($characters, ceil($length / strlen($characters)))), 0, $length);
-    }
-    
     /**
      * Log debug message
      */

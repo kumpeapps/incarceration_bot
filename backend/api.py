@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import jwt
+from jwt import InvalidTokenError
 from passlib.context import CryptContext
 
 # Import existing models
@@ -297,6 +298,60 @@ def can_manage_resource(current_user: User, resource_user_id: int) -> bool:
         return True
     # Users can only manage their own resources
     return current_user.id == resource_user_id
+
+def get_api_authenticated_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Allow authentication via JWT token or master API key - for external integrations like aMember."""
+    token = credentials.credentials
+    
+    # Check if it's the master API key
+    if MASTER_API_KEY and token == MASTER_API_KEY:
+        # Create a virtual admin user for master API key access
+        class MasterUser:
+            id = 0
+            username = "api_integration"
+            email = "api@system.local"
+            is_active = True
+            api_key = MASTER_API_KEY
+            
+            def is_admin(self):
+                return True
+            
+            def has_group(self, group_name):
+                return True  # Master key has all permissions
+            
+            def get_groups(self):
+                return ["admin"]
+            
+            @property
+            def role(self):
+                return "admin"
+            
+            def to_dict(self):
+                return {
+                    "id": self.id,
+                    "username": self.username,
+                    "email": self.email,
+                    "is_active": self.is_active,
+                    "role": self.role,
+                    "groups": [{"name": "admin", "display_name": "Administrators"}]
+                }
+        
+        return MasterUser()
+    
+    # Otherwise, use regular JWT authentication
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    
+    return user
 
 # Authentication endpoints
 @app.post("/auth/login", response_model=LoginResponse)
@@ -1446,7 +1501,7 @@ async def get_group_users(group_name: str, current_user: User = Depends(get_curr
 # aMember Integration Endpoints
 
 @app.post("/users/amember")
-async def create_amember_user(user_data: AmemberUserCreate, db: Session = Depends(get_db)):
+async def create_amember_user(user_data: AmemberUserCreate, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Create a user from aMember (API key auth)."""
     # Note: This endpoint should be protected by API key authentication in production
     
@@ -1486,7 +1541,7 @@ async def create_amember_user(user_data: AmemberUserCreate, db: Session = Depend
 
 
 @app.put("/users/amember/{amember_user_id}")
-async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate, db: Session = Depends(get_db)):
+async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Update a user from aMember (API key auth)."""
     # Note: This endpoint should be protected by API key authentication in production
     
@@ -1508,7 +1563,7 @@ async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate
 
 
 @app.delete("/users/amember/{amember_user_id}")
-async def delete_amember_user(amember_user_id: int, db: Session = Depends(get_db)):
+async def delete_amember_user(amember_user_id: int, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Deactivate a user from aMember (API key auth)."""
     # Note: This endpoint should be protected by API key authentication in production
     
@@ -1518,9 +1573,21 @@ async def delete_amember_user(amember_user_id: int, db: Session = Depends(get_db
     
     return {"message": "User deactivated"}
 
+@app.get("/users/amember/{amember_user_id}")
+async def get_amember_user(amember_user_id: int, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
+    """Get user information by aMember user ID (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    
+    # Find user by amember_user_id
+    user = db.query(User).filter(User.amember_user_id == amember_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user.to_dict()
+
 
 @app.post("/users/amember/{amember_user_id}/groups")
-async def assign_amember_user_to_group(amember_user_id: int, group_data: UserGroupAssign, db: Session = Depends(get_db)):
+async def assign_amember_user_to_group(amember_user_id: int, group_data: UserGroupAssign, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Assign aMember user to group (API key auth)."""
     # Note: This endpoint should be protected by API key authentication in production
     # You may need to add amember_user_id column for better tracking
@@ -1530,7 +1597,7 @@ async def assign_amember_user_to_group(amember_user_id: int, group_data: UserGro
 
 
 @app.delete("/users/amember/{amember_user_id}/groups/{group_name}")
-async def remove_amember_user_from_group(amember_user_id: int, group_name: str, db: Session = Depends(get_db)):
+async def remove_amember_user_from_group(amember_user_id: int, group_name: str, current_user = Depends(get_api_authenticated_user), db: Session = Depends(get_db)):
     """Remove aMember user from group (API key auth)."""
     # Note: This endpoint should be protected by API key authentication in production
     # You may need to add amember_user_id column for better tracking
