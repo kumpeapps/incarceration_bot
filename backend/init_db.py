@@ -184,6 +184,90 @@ def run_manual_migration_fallback():
     finally:
         session.close()
 
+def initialize_groups():
+    """Initialize required groups in the database."""
+    logger.info("Starting initialize_groups function...")
+    from database_connect import new_session
+    from sqlalchemy import text, inspect
+    
+    session = new_session()
+    try:
+        logger.info("Connected to database, checking for groups table...")
+        # Check if groups table exists using SQLAlchemy inspector
+        inspector = inspect(session.bind)
+        tables = inspector.get_table_names()
+        logger.info(f"Available tables: {tables}")
+        
+        if 'groups' not in tables:
+            logger.info("Groups table doesn't exist, skipping group initialization")
+            return
+        
+        logger.info("Groups table exists, ensuring all required groups are present...")
+        
+        # Define all required groups
+        groups_data = [
+            ('admin', 'Administrators', 'Full system access and user management'),
+            ('user', 'Regular Users', 'Standard user access to monitor functionality'),
+            ('moderator', 'Moderators', 'Enhanced access for content moderation'),
+            ('api', 'API Users', 'Users who can request and use API keys'),
+            ('guest', 'Guests', 'Limited access for guest users'),
+            ('banned', 'Banned Users', 'No access to the system'),
+            ('locked', 'Locked Users', 'User account has been locked')
+        ]
+        
+        from datetime import datetime
+        current_time = datetime.now()
+        groups_added = 0
+        
+        for name, display_name, description in groups_data:
+            # Check if this specific group already exists
+            existing = session.execute(
+                text("SELECT COUNT(*) FROM groups WHERE name = :name"),
+                {'name': name}
+            ).scalar()
+            
+            if existing == 0:
+                logger.info(f"Creating missing group: {name}")
+                insert_sql = """
+                    INSERT INTO groups (name, display_name, description, is_active, created_at, updated_at)
+                    VALUES (:name, :display_name, :description, 1, :created_at, :updated_at)
+                """
+                session.execute(text(insert_sql), {
+                    'name': name,
+                    'display_name': display_name,
+                    'description': description,
+                    'created_at': current_time,
+                    'updated_at': current_time
+                })
+                groups_added += 1
+            else:
+                logger.info(f"Group already exists: {name}")
+        
+        if groups_added > 0:
+            session.commit()
+            logger.info(f"Added {groups_added} new groups to database")
+        else:
+            logger.info("All required groups already exist")
+        
+        # Verify all groups are present
+        result = session.execute(text("SELECT name, display_name FROM groups ORDER BY name"))
+        groups = result.fetchall()
+        
+        logger.info("Current groups in database:")
+        for group in groups:
+            logger.info(f"  - {group[0]}: {group[1]}")
+            
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Failed to initialize groups: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Don't raise - continue with startup even if group initialization fails
+        logger.warning("Continuing with startup despite group initialization failure")
+    finally:
+        session.close()
+        logger.info("initialize_groups function completed")
+
 def initialize_database():
     """Initialize database with all necessary tables and data."""
     try:
@@ -192,6 +276,8 @@ def initialize_database():
         from models.Inmate import Inmate
         from models.Jail import Jail
         from models.Monitor import Monitor
+        from models.Group import Group
+        from models.UserGroup import UserGroup
         
         logger.info("Initializing database schema...")
         
@@ -206,6 +292,11 @@ def initialize_database():
         if not run_alembic_migrations():
             logger.warning("Alembic migrations failed, but continuing with startup")
         
+        # Ensure required groups exist
+        logger.info("About to initialize groups...")
+        initialize_groups()
+        logger.info("Group initialization completed")
+        
         logger.info("Database initialization completed successfully")
         return True
         
@@ -214,6 +305,9 @@ def initialize_database():
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return False
+
+
+
 
 def main():
     """Main initialization function."""

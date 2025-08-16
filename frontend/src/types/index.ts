@@ -60,6 +60,21 @@ export interface User {
   created_at: string;
   updated_at: string;
   last_login?: string;
+  api_key?: string;
+  groups?: Array<{
+    id: number;
+    name: string;
+    description?: string;
+    is_active: boolean;
+  }>;
+}
+
+export interface Group {
+  id: number;
+  name: string;
+  display_name: string;
+  description?: string;
+  is_active: boolean;
 }
 
 export interface LoginRequest {

@@ -5,7 +5,7 @@ FastAPI Backend for Incarceration Bot Frontend
 from datetime import datetime, timedelta
 from typing import List, Optional
 import os
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -20,6 +20,10 @@ from models.MonitorLink import MonitorLink
 from models.MonitorInmateLink import MonitorInmateLink
 from models.Jail import Jail
 from models.User import User
+from models.Group import Group
+from models.UserGroup import UserGroup
+from models.Session import Session as UserSession
+from helpers.user_group_service import UserGroupService
 import database_connect as db
 
 app = FastAPI(title="Incarceration Bot API", version="1.0.0")
@@ -36,6 +40,8 @@ app.add_middleware(
 # Security
 security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+MASTER_API_KEY = os.getenv("MASTER_API_KEY")  # Optional master API key for integrations
+EXTERNAL_USER_MANAGEMENT = os.getenv("EXTERNAL_USER_MANAGEMENT", "false").lower() == "true"  # External user management system
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -60,7 +66,7 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
-    role: str = "user"
+    groups: List[str] = ["user"]  # List of group names to assign
 
 class InmateResponse(BaseModel):
     id: int
@@ -130,6 +136,40 @@ class DashboardStats(BaseModel):
     recent_arrests: int
     recent_releases: int
 
+# Group management models
+class GroupCreate(BaseModel):
+    name: str
+    display_name: str
+    description: Optional[str] = None
+
+class GroupResponse(BaseModel):
+    id: int
+    name: str
+    display_name: str
+    description: Optional[str]
+    is_active: bool
+    created_at: str
+    updated_at: str
+    
+    class Config:
+        from_attributes = True
+
+class UserGroupAssign(BaseModel):
+    group_name: str
+
+class AmemberUserCreate(BaseModel):
+    username: str
+    email: str
+    password: Optional[str] = None
+    password_hash: Optional[str] = None
+    amember_user_id: int
+    is_active: bool = True
+
+class AmemberUserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+
 # Database dependency
 def get_db():
     session = db.new_session()
@@ -146,8 +186,57 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    token = credentials.credentials
+    
+    # Check if it's the master API key
+    if MASTER_API_KEY and token == MASTER_API_KEY:
+        # Create a virtual admin user for master API key access
+        class MasterUser:
+            id = 0
+            username = "master_api"
+            email = "master@system.local"
+            is_active = True
+            api_key = MASTER_API_KEY
+            
+            def is_admin(self):
+                return True
+            
+            def has_group(self, group_name):
+                return True  # Master key has all permissions
+            
+            def get_groups(self):
+                return ["admin"]
+            
+            @property
+            def role(self):
+                return "admin"
+            
+            def to_dict(self):
+                return {
+                    "id": self.id,
+                    "username": self.username,
+                    "email": self.email,
+                    "is_active": self.is_active,
+                    "role": self.role,
+                    "groups": self.get_groups()
+                }
+        
+        return MasterUser()
+    
+    # Check if it's a regular user API key
+    user = db.query(User).filter(User.api_key == token).first()
+    if user:
+        # Verify user has API access
+        if not user.has_group("api"):
+            raise HTTPException(
+                status_code=403, 
+                detail="API access denied: User does not have API permissions"
+            )
+        return user
+    
+    # Finally, try JWT token
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
@@ -158,14 +247,98 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
+def get_active_user(current_user: User = Depends(get_current_user)):
+    """Get current user and check for banned/locked status."""
+    # Check if user is banned
+    if current_user.has_group("banned"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Access denied: Your account has been banned. Please contact an administrator."
+        )
+    
+    # Check if user is locked
+    if current_user.has_group("locked"):
+        raise HTTPException(
+            status_code=423,  # HTTP 423 = Locked
+            detail="Access denied: Your account has been locked. Please contact an administrator."
+        )
+    
+    # Check if user account is inactive
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Your account is inactive."
+        )
+    
+    return current_user
+
+def require_admin(current_user: User = Depends(get_active_user)):
+    """Require admin privileges."""
+    if not current_user.has_group("admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+    return current_user
+
+def require_moderator_or_admin(current_user: User = Depends(get_active_user)):
+    """Require moderator or admin privileges."""
+    if not (current_user.has_group("admin") or current_user.has_group("moderator")):
+        raise HTTPException(
+            status_code=403,
+            detail="Moderator or admin access required"
+        )
+    return current_user
+
+def can_manage_resource(current_user: User, resource_user_id: int) -> bool:
+    """Check if user can manage a resource owned by another user."""
+    # Admins and moderators can manage all resources
+    if current_user.has_group("admin") or current_user.has_group("moderator"):
+        return True
+    # Users can only manage their own resources
+    return current_user.id == resource_user_id
+
 # Authentication endpoints
 @app.post("/auth/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+async def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == login_data.username).first()
     if not user or not user.verify_password(login_data.password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
+    # Check if user is banned
+    if user.has_group("banned"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Access denied: Your account has been banned. Please contact an administrator."
+        )
+    
+    # Check if user is locked
+    if user.has_group("locked"):
+        raise HTTPException(
+            status_code=423,  # HTTP 423 = Locked
+            detail="Access denied: Your account has been locked. Please contact an administrator."
+        )
+    
+    # Check if user account is inactive
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Your account is inactive."
+        )
+
     access_token = create_access_token(data={"sub": user.username})
+    
+    # Create session record
+    session = UserSession(
+        user_id=user.id,
+        session_token=access_token,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        login_time=datetime.utcnow()
+    )
+    db.add(session)
+    db.commit()
+    
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -173,12 +346,56 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     }
 
 @app.post("/auth/logout")
-async def logout(current_user: User = Depends(get_current_user)):
+async def logout(current_user: User = Depends(get_active_user), db: Session = Depends(get_db)):
+    # Find and end the current session
+    # Note: In a real app, you'd want to track the current session token
+    # For now, we'll just mark the most recent active session as ended
+    active_session = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id,
+        UserSession.is_active == True
+    ).order_by(UserSession.login_time.desc()).first()
+    
+    if active_session:
+        active_session.end_session()
+        db.commit()
+    
     return {"message": "Successfully logged out"}
 
 @app.get("/auth/me")
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(current_user: User = Depends(get_active_user)):
     return current_user.to_dict()
+
+@app.post("/auth/change-password")
+async def change_password(
+    password_data: dict, 
+    current_user: User = Depends(get_active_user), 
+    db: Session = Depends(get_db)
+):
+    """Change current user's password"""
+    current_password = password_data.get("current_password")
+    new_password = password_data.get("new_password")
+    
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Current password and new password are required")
+    
+    # Verify current password
+    if not current_user.verify_password(current_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    current_user.hashed_password = User.hash_password(new_password)
+    db.commit()
+    
+    return {"message": "Password changed successfully"}
+
+# Configuration endpoints
+@app.get("/config/user-management")
+async def get_user_management_config():
+    """Get user management configuration - whether it's externally managed"""
+    return {
+        "external_user_management": EXTERNAL_USER_MANAGEMENT,
+        "description": "Whether user management is handled by external systems (e.g., aMember)"
+    }
 
 # Dashboard endpoints
 @app.get("/dashboard/stats", response_model=DashboardStats)
@@ -308,18 +525,31 @@ async def get_inmates(
         })
         enhancement_data = enhancement_result.fetchone()
         
-        # Determine actual status with null checks
+        # Determine actual status based on this individual record's release_date
+        inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
+        
+        # Get enhanced info for this person (for metadata only, not status)
+        enhancement_query = text("""
+            SELECT COUNT(*) as total_records,
+                   MIN(in_custody_date) as first_booking,
+                   MAX(in_custody_date) as latest_booking
+            FROM inmates 
+            WHERE name = :name AND dob = :dob AND jail_id = :jail_id
+        """)
+        
+        enhancement_result = db.execute(enhancement_query, {
+            'name': row.name,
+            'dob': row.dob,
+            'jail_id': row.jail_id
+        })
+        enhancement_data = enhancement_result.fetchone()
+        
+        # Add enhanced metadata fields
         if enhancement_data:
-            has_release = enhancement_data.all_releases and enhancement_data.all_releases.strip()
-            actual_status = 'released' if has_release else 'in_custody'
-            
-            # Add enhanced fields
-            inmate_dict['actual_status'] = actual_status
             inmate_dict['total_records'] = enhancement_data.total_records
             inmate_dict['first_booking_date'] = format_date_only(enhancement_data.first_booking)
         else:
             # Fallback if query fails
-            inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
             inmate_dict['total_records'] = 1
             inmate_dict['first_booking_date'] = format_date_only(row.in_custody_date)
         
@@ -413,7 +643,7 @@ async def get_inmate(
     })
     enhancement_data = enhancement_result.fetchone()
     
-    # Always use the individual record's release_date for status determination
+    # Use individual record's release_date for status determination
     inmate_dict['actual_status'] = 'released' if (row.release_date and row.release_date.strip()) else 'in_custody'
     
     if enhancement_data:
@@ -438,11 +668,11 @@ async def get_inmate(
 async def get_monitors(
     page: int = 1,
     limit: int = 50,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db)
 ):
-    # Admin sees all monitors, users see only their own
-    if current_user.role == "admin":
+    # Admin and moderators see all monitors, users see only their own
+    if current_user.has_group("admin") or current_user.has_group("moderator"):
         query = db.query(Monitor)
     else:
         query = db.query(Monitor).filter(Monitor.user_id == current_user.id)
@@ -479,15 +709,15 @@ async def create_monitor(
 @app.get("/monitors/{monitor_id}")
 async def get_monitor(
     monitor_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db)
 ):
     monitor = db.query(Monitor).filter(Monitor.id == monitor_id).first()
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
     
-    # Users can only view their own monitors, admins can view any
-    if current_user.role != "admin" and monitor.user_id != current_user.id:
+    # Users can only view their own monitors, admins and moderators can view any
+    if not can_manage_resource(current_user, monitor.user_id):
         raise HTTPException(status_code=403, detail="Not authorized to view this monitor")
     
     return monitor.to_dict()
@@ -547,15 +777,12 @@ async def get_jails(
 
 # Users endpoints (admin only)
 @app.get("/users")
-async def get_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+async def get_users(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     users = db.query(User).all()
     return [user.to_dict() for user in users]
 
 @app.post("/users")
-async def create_user(user_data: UserCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_user(user_data: UserCreate, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
@@ -573,19 +800,23 @@ async def create_user(user_data: UserCreate, current_user: User = Depends(get_cu
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=User.hash_password(user_data.password),
-        role=user_data.role
+        hashed_password=User.hash_password(user_data.password)
     )
     
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     
+    # Assign groups
+    service = UserGroupService(db)
+    for group_name in user_data.groups:
+        service.add_user_to_group(new_user.id, group_name, current_user.id)
+    
     return new_user.to_dict()
 
 @app.put("/users/{user_id}")
 async def update_user(user_id: int, user_data: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "admin":
+    if not current_user.is_admin():
         raise HTTPException(status_code=403, detail="Admin access required")
     
     user = db.query(User).filter(User.id == user_id).first()
@@ -607,11 +838,10 @@ async def update_user(user_id: int, user_data: dict, current_user: User = Depend
             raise HTTPException(status_code=400, detail="Email already exists")
         user.email = user_data["email"]
     
-    if "role" in user_data:
-        user.role = user_data["role"]
-    
     if "password" in user_data and user_data["password"]:
         user.hashed_password = User.hash_password(user_data["password"])
+    
+    # Note: Group management should be done through separate group endpoints
     
     db.commit()
     db.refresh(user)
@@ -620,7 +850,7 @@ async def update_user(user_id: int, user_data: dict, current_user: User = Depend
 
 @app.delete("/users/{user_id}")
 async def delete_user(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "admin":
+    if not current_user.is_admin():
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Prevent admin from deleting themselves
@@ -635,6 +865,74 @@ async def delete_user(user_id: int, current_user: User = Depends(get_current_use
     db.commit()
     
     return {"message": "User deleted successfully"}
+
+@app.post("/users/{user_id}/generate-api-key")
+async def generate_user_api_key(
+    user_id: int, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """Generate a new API key for a user (admin only)"""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if user has API access
+    if not user.has_group("api"):
+        raise HTTPException(
+            status_code=403, 
+            detail="User must be in 'api' group to receive API keys"
+        )
+    
+    # Generate new API key
+    import secrets
+    import string
+    alphabet = string.ascii_letters + string.digits
+    new_api_key = ''.join(secrets.choice(alphabet) for _ in range(32))
+    
+    # Update user with new API key
+    user.api_key = new_api_key
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "message": "API key generated successfully",
+        "user_id": user.id,
+        "username": user.username,
+        "api_key": new_api_key
+    }
+
+@app.post("/my/generate-api-key")
+async def generate_my_api_key(
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """Generate a new API key for the current user"""
+    # Check if user has API access
+    if not current_user.has_group("api"):
+        raise HTTPException(
+            status_code=403, 
+            detail="You must be in the 'api' group to request API keys. Please contact an administrator."
+        )
+    
+    # Generate new API key
+    import secrets
+    import string
+    alphabet = string.ascii_letters + string.digits
+    new_api_key = ''.join(secrets.choice(alphabet) for _ in range(32))
+    
+    # Update user with new API key
+    current_user.api_key = new_api_key
+    db.commit()
+    db.refresh(current_user)
+    
+    return {
+        "message": "API key generated successfully",
+        "api_key": new_api_key
+    }
 
 @app.get("/users/{user_id}/monitors")
 async def get_user_monitors(
@@ -1037,6 +1335,208 @@ async def delete_monitor_inmate_link(
     
     return {"message": "Link deleted successfully"}
 
+
+# Configuration Endpoints
+
+@app.get("/config/external-user-management")
+async def get_external_user_management_config():
+    """Get external user management configuration (public endpoint)."""
+    return {"external_user_management": EXTERNAL_USER_MANAGEMENT}
+
+
+# Group Management Endpoints
+
+@app.get("/groups")
+async def get_groups(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all groups (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    groups = db.query(Group).filter(Group.is_active == True).all()
+    return [group.to_dict() for group in groups]
+
+
+@app.post("/groups")
+async def create_group(group_data: GroupCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if group already exists
+    existing_group = db.query(Group).filter(Group.name == group_data.name).first()
+    if existing_group:
+        raise HTTPException(status_code=400, detail="Group already exists")
+    
+    group = Group(
+        name=group_data.name,
+        display_name=group_data.display_name,
+        description=group_data.description
+    )
+    
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    
+    return group.to_dict()
+
+
+@app.get("/users/{user_id}/groups")
+async def get_user_groups(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get groups for a specific user."""
+    # Users can view their own groups, admins can view any user's groups
+    if not current_user.is_admin() and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    service = UserGroupService(db)
+    return service.get_user_groups(user_id)
+
+
+@app.post("/users/{user_id}/groups")
+async def assign_user_to_group(user_id: int, group_data: UserGroupAssign, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Assign a user to a group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    service = UserGroupService(db)
+    success = service.add_user_to_group(user_id, group_data.group_name, current_user.id)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to assign user to group")
+    
+    return {"message": f"User assigned to group {group_data.group_name}"}
+
+
+@app.delete("/users/{user_id}/groups/{group_name}")
+async def remove_user_from_group(user_id: int, group_name: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Remove a user from a group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    service = UserGroupService(db)
+    success = service.remove_user_from_group(user_id, group_name)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to remove user from group")
+    
+    return {"message": f"User removed from group {group_name}"}
+
+
+@app.get("/groups/{group_name}/users")
+async def get_group_users(group_name: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all users in a group (admin only)."""
+    if not current_user.is_admin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    service = UserGroupService(db)
+    return service.get_group_users(group_name)
+
+
+# aMember Integration Endpoints
+
+@app.post("/users/amember")
+async def create_amember_user(user_data: AmemberUserCreate, db: Session = Depends(get_db)):
+    """Create a user from aMember (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    
+    # Check if user already exists by aMember ID
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    # Determine password hash - either use provided hash or hash the provided password
+    if user_data.password_hash:
+        # Use the provided password hash directly (from aMember)
+        password_hash = user_data.password_hash
+    elif user_data.password:
+        # Hash the provided plaintext password
+        password_hash = User.hash_password(user_data.password)
+    else:
+        raise HTTPException(status_code=400, detail="Either password or password_hash must be provided")
+    
+    # Create new user
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=password_hash,
+        amember_user_id=user_data.amember_user_id,
+        is_active=user_data.is_active
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Add to default group
+    service = UserGroupService(db)
+    service.add_user_to_group(new_user.id, "user")
+    
+    return new_user.to_dict()
+
+
+@app.put("/users/amember/{amember_user_id}")
+async def update_amember_user(amember_user_id: int, user_data: AmemberUserUpdate, db: Session = Depends(get_db)):
+    """Update a user from aMember (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    
+    # Find user by username (you may need to add amember_user_id column for better tracking)
+    user = db.query(User).filter(User.username == user_data.username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update user fields
+    if user_data.username:
+        user.username = user_data.username
+    if user_data.email:
+        user.email = user_data.email
+    if user_data.is_active is not None:
+        user.is_active = user_data.is_active
+    
+    db.commit()
+    return user.to_dict()
+
+
+@app.delete("/users/amember/{amember_user_id}")
+async def delete_amember_user(amember_user_id: int, db: Session = Depends(get_db)):
+    """Deactivate a user from aMember (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    
+    # For now, we'll deactivate rather than delete to preserve data integrity
+    # You may need to add amember_user_id column for better tracking
+    # This is a placeholder implementation
+    
+    return {"message": "User deactivated"}
+
+
+@app.post("/users/amember/{amember_user_id}/groups")
+async def assign_amember_user_to_group(amember_user_id: int, group_data: UserGroupAssign, db: Session = Depends(get_db)):
+    """Assign aMember user to group (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    # You may need to add amember_user_id column for better tracking
+    
+    # This is a placeholder implementation
+    return {"message": f"User {amember_user_id} assigned to group {group_data.group_name}"}
+
+
+@app.delete("/users/amember/{amember_user_id}/groups/{group_name}")
+async def remove_amember_user_from_group(amember_user_id: int, group_name: str, db: Session = Depends(get_db)):
+    """Remove aMember user from group (API key auth)."""
+    # Note: This endpoint should be protected by API key authentication in production
+    # You may need to add amember_user_id column for better tracking
+    
+    # This is a placeholder implementation
+    return {"message": f"User {amember_user_id} removed from group {group_name}"}
 
 
 if __name__ == "__main__":

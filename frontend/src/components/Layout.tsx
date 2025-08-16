@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAppSelector, useAppDispatch, RootState } from '../store';
 import {
@@ -26,8 +26,9 @@ import {
   Settings,
   Logout,
   AccountCircle,
+  Person,
 } from '@mui/icons-material';
-import { logout } from '../store/authSlice';
+import { logout, getCurrentUser } from '../store/authSlice';
 
 const drawerWidth = 240;
 
@@ -44,7 +45,14 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector((state: RootState) => state.auth);
+  const { user, isAuthenticated } = useAppSelector((state: RootState) => state.auth);
+
+  // Refresh user data on component mount to ensure we have the latest user info including role
+  useEffect(() => {
+    if (isAuthenticated) {
+      dispatch(getCurrentUser());
+    }
+  }, [dispatch, isAuthenticated]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -61,6 +69,11 @@ const Layout: React.FC = () => {
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
+    handleMenuClose();
+  };
+
+  const handleProfile = () => {
+    navigate('/profile');
     handleMenuClose();
   };
 
@@ -145,6 +158,12 @@ const Layout: React.FC = () => {
               open={Boolean(anchorEl)}
               onClose={handleMenuClose}
             >
+              <MenuItem onClick={handleProfile}>
+                <ListItemIcon>
+                  <Person fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>My Profile</ListItemText>
+              </MenuItem>
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon>
                   <Logout fontSize="small" />
