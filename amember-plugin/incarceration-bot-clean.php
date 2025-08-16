@@ -3,20 +3,14 @@
 /**
  * aMember Plugin for Incarceration Bot Integration
  * 
- * This is the consolidated, production-ready plugin that provides:
- * - Complete user synchronization (create, update, delete)
- * - Product-to-group mapping with validation
- * - Access control integration
- * - Comprehensive error logging and debugging
- * - Malformed mapping validation with detailed error messages
+ * Filename: incarceration-bot.php
+ * Class: Am_Plugin_IncarcerationBot
+ * Location: application/default/plugins/misc/incarceration-bot.php
  * 
  * Version: 1.0.0
  * Author: Incarceration Bot Development Team
  */
 
-if (!defined('AM_APPLICATION_PATH')) {
-    die('Direct access not allowed');
-}
 if (!defined('AM_APPLICATION_PATH')) {
     die('Direct access not allowed');
 }
@@ -29,22 +23,22 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
     
     protected $_configPrefix = 'misc.incarceration_bot.';
     
-    public function getTitle()
+    function getTitle()
     {
         return "Incarceration Bot Integration";
     }
     
-    public function getDescription()
+    function getDescription()
     {
-        return "Synchronizes aMember users and subscriptions with Incarceration Bot user management system";
+        return "Synchronizes aMember users and subscriptions with Incarceration Bot user management system. Always syncs existing aMember passwords - no random password generation.";
     }
     
-    public function isConfigured()
+    function isConfigured()
     {
         return strlen($this->getConfig('api_base_url')) > 0 && strlen($this->getConfig('api_key')) > 0;
     }
     
-    public function init()
+    function init()
     {
         parent::init();
         
@@ -60,7 +54,7 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         $this->getDi()->hook->add(Am_Event::ACCESS_AFTER_DELETE, array($this, 'onAccessDelete'));
     }
     
-    public function _initSetupForm(Am_Form_Setup $form)
+    function _initSetupForm(Am_Form_Setup $form)
     {
         $form->addText('api_base_url', array('class' => 'am-el-wide'))
             ->setLabel('API Base URL')
@@ -71,14 +65,23 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             ->setLabel('API Key')
             ->addRule('required');
             
+        // Get available groups from Incarceration Bot API
+        $availableGroups = $this->getAvailableGroups();
+        
         $form->addSelect('default_group')
             ->setLabel('Default Group for New Users')
-            ->loadOptions(array(
-                'user' => 'Regular User',
-                'admin' => 'Administrator',
-                'moderator' => 'Moderator'
-            ))
+            ->loadOptions($availableGroups)
             ->setValue('user');
+            
+        $form->addSelect('locked_group')
+            ->setLabel('Group for Locked Users')
+            ->loadOptions(array_merge(array('' => 'No Change'), $availableGroups))
+            ->setValue('locked');
+            
+        $form->addSelect('banned_group')
+            ->setLabel('Group for Banned Users') 
+            ->loadOptions(array_merge(array('' => 'No Change'), $availableGroups))
+            ->setValue('banned');
             
         $form->addAdvCheckbox('debug_mode')
             ->setLabel('Debug Mode');
@@ -94,53 +97,74 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             ->setValue("# Example mappings:\n# 1=user\n# 2=admin\n# 3=moderator");
     }
     
-    public function onUserInsert(Am_Event $event)
+    function onUserInsert(Am_Event $event)
     {
         $user = $event->getUser();
         $this->logDebug("User created: " . $user->login);
         
-        // Create user in Incarceration Bot
+        // Prepare user data for Incarceration Bot
         $userData = array(
             'username' => $user->login,
             'email' => $user->email,
-            'password' => $this->generateRandomPassword(),
             'amember_user_id' => $user->user_id,
-            'is_active' => true
+            'is_active' => $this->determineUserActiveStatus($user)
         );
+        
+        // Always sync aMember password - never generate random passwords
+        // $user->pass contains the hashed password from aMember database
+        if (!empty($user->pass)) {
+            $userData['hashed_password'] = $user->pass;
+            $userData['password_format'] = $this->detectPasswordFormat($user->pass);
+        } else {
+            // If for some reason the password is empty, this is an error condition
+            $this->logError("User password is empty for: " . $user->login);
+            return; // Don't create user without password
+        }
         
         $response = $this->apiRequest('POST', '/users/amember', $userData);
         
         if ($response && isset($response['id'])) {
             $this->logDebug("User created successfully in Incarceration Bot: " . $response['id']);
             
-            // Assign default group
-            $defaultGroup = $this->getConfig('default_group', 'user');
-            $this->assignUserToGroup($response['id'], $defaultGroup);
+            // Assign appropriate group based on user status
+            $groupName = $this->determineUserGroup($user);
+            if ($groupName) {
+                $this->assignUserToGroup($response['id'], $groupName);
+            }
         } else {
             $this->logError("Failed to create user in Incarceration Bot for: " . $user->login);
         }
     }
     
-    public function onUserUpdate(Am_Event $event)
+    function onUserUpdate(Am_Event $event)
     {
         $user = $event->getUser();
         $this->logDebug("User updated: " . $user->login);
         
-        // Update user in Incarceration Bot
+        // Prepare user data for update
         $userData = array(
             'username' => $user->login,
             'email' => $user->email,
-            'is_active' => $user->is_approved && !$user->is_locked
+            'is_active' => $this->determineUserActiveStatus($user)
         );
+        
+        // Handle password sync - always sync password if it exists and changed
+        if (!empty($user->pass)) {
+            $userData['hashed_password'] = $user->pass;
+            $userData['password_format'] = $this->detectPasswordFormat($user->pass);
+        }
         
         $response = $this->apiRequest('PUT', '/users/amember/' . $user->user_id, $userData);
         
-        if (!$response) {
+        if ($response) {
+            // Update user's group based on current status
+            $this->updateUserGroups($user);
+        } else {
             $this->logError("Failed to update user in Incarceration Bot for: " . $user->login);
         }
     }
     
-    public function onUserDelete(Am_Event $event)
+    function onUserDelete(Am_Event $event)
     {
         $user = $event->getUser();
         $this->logDebug("User deleted: " . $user->login);
@@ -153,7 +177,7 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    public function onAccessInsert(Am_Event $event)
+    function onAccessInsert(Am_Event $event)
     {
         $access = $event->getAccess();
         $user = $access->getUser();
@@ -168,7 +192,7 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    public function onAccessDelete(Am_Event $event)
+    function onAccessDelete(Am_Event $event)
     {
         $access = $event->getAccess();
         $user = $access->getUser();
@@ -326,10 +350,131 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         return false;
     }
     
-    private function generateRandomPassword($length = 16)
+    private function getAvailableGroups()
     {
-        $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-        return substr(str_shuffle(str_repeat($characters, ceil($length / strlen($characters)))), 0, $length);
+        // Try to fetch available groups from Incarceration Bot API
+        $response = $this->apiRequest('GET', '/groups');
+        
+        if ($response && is_array($response)) {
+            $groups = array();
+            foreach ($response as $group) {
+                if (isset($group['name'])) {
+                    $groups[$group['name']] = $group['name'];
+                }
+            }
+            return $groups;
+        }
+        
+        // Fallback to default groups if API call fails
+        return array(
+            'user' => 'Regular User',
+            'admin' => 'Administrator', 
+            'moderator' => 'Moderator',
+            'super_admin' => 'Super Administrator',
+            'api_user' => 'API User',
+            'guest' => 'Guest',
+            'locked' => 'Locked',
+            'banned' => 'Banned'
+        );
+    }
+    
+    private function determineUserActiveStatus($user)
+    {
+        // User is active if approved and not locked
+        return $user->is_approved && !$user->is_locked;
+    }
+    
+    private function determineUserGroup($user)
+    {
+        // Check if user is locked
+        if ($user->is_locked) {
+            $lockedGroup = $this->getConfig('locked_group', '');
+            if (!empty($lockedGroup)) {
+                return $lockedGroup;
+            }
+        }
+        
+        // Check if user is banned (not approved)
+        if (!$user->is_approved) {
+            $bannedGroup = $this->getConfig('banned_group', '');
+            if (!empty($bannedGroup)) {
+                return $bannedGroup;
+            }
+        }
+        
+        // Default group for active users
+        return $this->getConfig('default_group', 'user');
+    }
+    
+    private function updateUserGroups($user)
+    {
+        $newGroup = $this->determineUserGroup($user);
+        if ($newGroup) {
+            // Remove from previous status groups and assign to new group
+            $this->removeUserFromStatusGroups($user->user_id);
+            $this->assignUserToGroupByAmemberId($user->user_id, $newGroup);
+        }
+    }
+    
+    private function removeUserFromStatusGroups($amemberUserId)
+    {
+        $statusGroups = array(
+            $this->getConfig('default_group', 'user'),
+            $this->getConfig('locked_group', ''),
+            $this->getConfig('banned_group', '')
+        );
+        
+        foreach ($statusGroups as $group) {
+            if (!empty($group)) {
+                $this->removeUserFromGroupByAmemberId($amemberUserId, $group);
+            }
+        }
+    }
+    
+    private function detectPasswordFormat($passwordHash)
+    {
+        if (empty($passwordHash)) {
+            return 'plain';
+        }
+        
+        // Detect aMember/WordPress phpass format (most common in aMember)
+        if (substr($passwordHash, 0, 3) === '$P$' || substr($passwordHash, 0, 3) === '$H$') {
+            return 'phpass';
+        }
+        
+        // Detect PHP password_hash() bcrypt format
+        if (substr($passwordHash, 0, 4) === '$2a$' || substr($passwordHash, 0, 4) === '$2b$' || 
+            substr($passwordHash, 0, 4) === '$2x$' || substr($passwordHash, 0, 4) === '$2y$') {
+            return 'bcrypt';
+        }
+        
+        // Detect argon2i format (newer PHP password_hash)
+        if (substr($passwordHash, 0, 9) === '$argon2i$') {
+            return 'argon2i';
+        }
+        
+        // Detect argon2id format (newest PHP password_hash)
+        if (substr($passwordHash, 0, 10) === '$argon2id$') {
+            return 'argon2id';
+        }
+        
+        // Detect Unix MD5 crypt format
+        if (substr($passwordHash, 0, 3) === '$1$') {
+            return 'crypt';
+        }
+        
+        // Detect simple MD5 hash (32 hex characters)
+        if (strlen($passwordHash) === 32 && ctype_xdigit($passwordHash)) {
+            return 'md5';
+        }
+        
+        // Detect simple SHA1 hash (40 hex characters)
+        if (strlen($passwordHash) === 40 && ctype_xdigit($passwordHash)) {
+            return 'sha1';
+        }
+        
+        // Default to phpass for aMember (most likely format)
+        return 'phpass';
     }
     
     private function logDebug($message)

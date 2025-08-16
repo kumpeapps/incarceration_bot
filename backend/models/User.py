@@ -12,8 +12,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from database_connect import Base
 from passlib.context import CryptContext
+from passlib.hash import bcrypt, md5_crypt, phpass, argon2
+import hashlib
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt", "argon2", "phpass"], deprecated="auto")
 
 
 class User(Base):
@@ -40,6 +42,7 @@ class User(Base):
     username = Column(String(50), nullable=False, unique=True)
     email = Column(String(255), nullable=False, unique=True)
     hashed_password = Column(String(255), nullable=False)
+    password_format = Column(String(20), nullable=False, default="bcrypt")
     api_key = Column(String(255), nullable=True, unique=True)
     amember_user_id = Column(Integer, nullable=True, unique=True)
     is_active = Column(Boolean, nullable=False, default=True)
@@ -53,6 +56,38 @@ class User(Base):
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash."""
         return pwd_context.verify(password, self.hashed_password)
+    
+    def verify_password_with_format(self, password: str, password_format: str = "bcrypt") -> bool:
+        """Verify a password against the stored hash with specific format."""
+        if password_format == "bcrypt":
+            return pwd_context.verify(password, self.hashed_password)
+        elif password_format == "phpass":
+            # aMember/WordPress phpass format
+            try:
+                return phpass.verify(password, self.hashed_password)
+            except (ValueError, TypeError):
+                return False
+        elif password_format in ["argon2i", "argon2id", "argon2"]:
+            # PHP password_hash() argon2 formats
+            try:
+                return argon2.verify(password, self.hashed_password)
+            except (ValueError, TypeError):
+                return False
+        elif password_format == "md5":
+            # Simple MD5 hash
+            return hashlib.md5(password.encode()).hexdigest() == self.hashed_password
+        elif password_format == "sha1":
+            # Simple SHA1 hash
+            return hashlib.sha1(password.encode()).hexdigest() == self.hashed_password
+        elif password_format == "crypt":
+            # Unix crypt format
+            try:
+                return md5_crypt.verify(password, self.hashed_password)
+            except (ValueError, TypeError):
+                return False
+        else:
+            # Default to bcrypt for unknown formats
+            return pwd_context.verify(password, self.hashed_password)
 
     @staticmethod
     def hash_password(password: str) -> str:
