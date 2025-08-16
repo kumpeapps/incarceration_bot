@@ -63,9 +63,139 @@ def wait_for_database(max_retries=30, delay=2):
     logger.error("Failed to connect to database after all retries")
     return False
 
+def ensure_critical_schema_updates():
+    """Ensure critical schema updates are applied (idempotent)."""
+    from database_connect import new_session
+    from sqlalchemy import text, inspect, Column, String, Integer
+    from sqlalchemy.schema import CreateTable
+    from sqlalchemy.exc import OperationalError
+    
+    session = new_session()
+    try:
+        logger.info("Ensuring critical schema updates are applied...")
+        
+        inspector = inspect(session.bind)
+        
+        # Ensure users table exists
+        tables = inspector.get_table_names()
+        if 'users' not in tables:
+            logger.warning("Users table does not exist - will be created by migrations")
+            return True
+        
+        # Check and add api_key column if missing
+        columns = inspector.get_columns('users')
+        column_names = [col['name'] for col in columns]
+        
+        updates_applied = False
+        
+        if 'api_key' not in column_names:
+            logger.info("Adding api_key column to users table")
+            try:
+                # Use SQLAlchemy DDL operations for database agnosticism
+                from sqlalchemy import DDL
+                ddl = DDL("ALTER TABLE users ADD COLUMN api_key %(api_key_type)s NULL")
+                
+                # Get database-specific type for VARCHAR(255)
+                dialect_name = session.bind.dialect.name
+                if dialect_name == 'mysql':
+                    api_key_type = 'VARCHAR(255)'
+                elif dialect_name == 'postgresql':
+                    api_key_type = 'VARCHAR(255)'
+                elif dialect_name == 'sqlite':
+                    api_key_type = 'TEXT'
+                else:
+                    api_key_type = 'VARCHAR(255)'
+                
+                session.execute(ddl, {'api_key_type': api_key_type})
+                
+                # Add unique constraint separately for better compatibility
+                try:
+                    constraint_ddl = DDL("ALTER TABLE users ADD CONSTRAINT uk_users_api_key UNIQUE (api_key)")
+                    session.execute(constraint_ddl)
+                except OperationalError as e:
+                    if 'duplicate key' not in str(e).lower() and 'already exists' not in str(e).lower():
+                        logger.warning(f"Could not add unique constraint to api_key: {e}")
+                
+                updates_applied = True
+            except OperationalError as e:
+                if 'duplicate column' in str(e).lower() or 'already exists' in str(e).lower():
+                    logger.info("✅ api_key column already exists (caught during creation)")
+                else:
+                    raise
+        else:
+            logger.info("✅ api_key column already exists in users table")
+        
+        if 'amember_user_id' not in column_names:
+            logger.info("Adding amember_user_id column to users table")
+            try:
+                # Use SQLAlchemy DDL operations for database agnosticism
+                from sqlalchemy import DDL
+                ddl = DDL("ALTER TABLE users ADD COLUMN amember_user_id %(amember_id_type)s NULL")
+                
+                # Get database-specific type for INT
+                dialect_name = session.bind.dialect.name
+                if dialect_name == 'mysql':
+                    amember_id_type = 'INT'
+                elif dialect_name == 'postgresql':
+                    amember_id_type = 'INTEGER'
+                elif dialect_name == 'sqlite':
+                    amember_id_type = 'INTEGER'
+                else:
+                    amember_id_type = 'INTEGER'
+                
+                session.execute(ddl, {'amember_id_type': amember_id_type})
+                
+                # Add unique constraint separately for better compatibility
+                try:
+                    constraint_ddl = DDL("ALTER TABLE users ADD CONSTRAINT uk_users_amember_user_id UNIQUE (amember_user_id)")
+                    session.execute(constraint_ddl)
+                except OperationalError as e:
+                    if 'duplicate key' not in str(e).lower() and 'already exists' not in str(e).lower():
+                        logger.warning(f"Could not add unique constraint to amember_user_id: {e}")
+                
+                updates_applied = True
+            except OperationalError as e:
+                if 'duplicate column' in str(e).lower() or 'already exists' in str(e).lower():
+                    logger.info("✅ amember_user_id column already exists (caught during creation)")
+                else:
+                    raise
+        else:
+            logger.info("✅ amember_user_id column already exists in users table")
+        
+        if updates_applied:
+            session.commit()
+            logger.info("✅ Critical schema updates applied successfully")
+        else:
+            logger.info("✅ All critical schema updates already present")
+        
+        # Fix alembic version if it's broken
+        try:
+            result = session.execute(text("SELECT version_num FROM alembic_version")).fetchone()
+            if result and result[0] == '6049d5bb7db9':
+                logger.info("Fixing broken alembic version")
+                session.execute(text("UPDATE alembic_version SET version_num = 'a9f5f7465f50'"))
+                session.commit()
+                logger.info("✅ Fixed alembic version")
+        except Exception as e:
+            logger.debug(f"Alembic version check failed (expected if table doesn't exist): {e}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to ensure critical schema updates: {e}")
+        session.rollback()
+        return False
+    finally:
+        session.close()
+
 def run_alembic_migrations():
     """Run Alembic migrations to update database schema."""
     try:
+        # First, ensure critical schema updates are applied safely
+        if not ensure_critical_schema_updates():
+            logger.error("Critical schema updates failed")
+            return False
+            
         from alembic.config import Config
         from alembic import command
         
@@ -112,6 +242,24 @@ def run_alembic_migrations():
             logger.error("  docker-compose exec backend_api alembic merge -m 'merge heads' heads")
             logger.error("  docker-compose exec backend_api alembic upgrade head")
             return False
+        
+        # Check if this is a broken revision error
+        if "can't locate revision identified by" in error_str:
+            logger.warning("Broken revision detected, attempting to fix...")
+            try:
+                from alembic.config import Config
+                from alembic import command
+                
+                alembic_cfg = Config('/app/alembic.ini')
+                # Stamp to head to fix broken revision
+                command.stamp(alembic_cfg, 'head')
+                logger.info("Fixed broken revision, trying upgrade again...")
+                command.upgrade(alembic_cfg, 'head')
+                logger.info("Alembic migrations completed successfully after revision fix")
+                return True
+            except Exception as fix_error:
+                logger.error(f"Failed to fix broken revision: {fix_error}")
+                return run_manual_migration_fallback()
         
         # For other errors, fall back to manual migration
         logger.info("Attempting manual migration as fallback...")

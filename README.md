@@ -11,25 +11,27 @@ A comprehensive jail monitoring system that scrapes inmate data from county jail
 - **Real-time Notifications**: Receive alerts when monitored individuals are arrested or released
 - **Modern Web Interface**: React-based frontend with responsive design
 - **REST API**: Full-featured API for integration with other systems
-- **User Management**: Multi-user support with role-based access control
+- **User Management**: Multi-user support with role-based access control and aMember integration
 - **Advanced Search**: Search inmates across all monitored jails with filtering
 - **Days Incarcerated Tracking**: Automatic calculation of incarceration duration
 - **Mugshot Support**: Automatic fetching and display of inmate photos
 - **Performance Optimized**: Asynchronous processing for faster scraping
+- **Database Agnostic**: Supports MySQL, PostgreSQL, and SQLite
+- **Automatic Migrations**: Database schema updates run automatically on deployment
 
 ## 🏗️ Project Architecture
 
-- **`backend/`** - Python backend with scraping engine and FastAPI web API
-- **`frontend/`** - React/TypeScript web interface with Material-UI components
-- **`docker/`** - Multi-stage Docker configurations for all services
-- **`docs/`** - Comprehensive documentation and deployment guides
+- **`backend/`** - Python FastAPI backend with scraping engine and web API
+- **`frontend/`** - React/TypeScript web interface with modern design
+- **`amember-plugin/`** - PHP plugin for aMember integration
+- **Database-agnostic design** - Works with MySQL, PostgreSQL, SQLite
 
 ### 🐳 Docker Images
 
 The project consists of three optimized Docker images:
 
 - **`justinkumpe/incarceration_bot`** - Core scraping service (backend only)
-- **`justinkumpe/incarceration_bot_api`** - FastAPI web service
+- **`justinkumpe/incarceration_bot_api`** - FastAPI web service with automatic migrations
 - **`justinkumpe/incarceration_bot_frontend`** - React web interface
 
 ## 🚀 Quick Start
