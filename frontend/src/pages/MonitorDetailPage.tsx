@@ -251,6 +251,7 @@ const MonitorDetailPage: React.FC = () => {
       const response = await apiService.getMonitors();
       // Filter out the current monitor from the list
       const filtered = response.items.filter((mon: Monitor) => mon.id !== monitorId);
+      setError(null); // Clear any previous errors on success
       setAvailableMonitors(filtered);
     } catch (err) {
       console.error('Failed to fetch available monitors:', err);
@@ -1054,6 +1055,11 @@ const MonitorDetailPage: React.FC = () => {
           <Typography variant="body2" color="textSecondary" mb={2}>
             Link another monitor record that represents the same person.
           </Typography>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
           <FormControl fullWidth margin="normal">
             <InputLabel>Select Monitor to Link</InputLabel>
             <Select
