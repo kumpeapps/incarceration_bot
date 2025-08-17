@@ -1,72 +1,158 @@
 <?php
-
-if (!defined('AM_APPLICATION_PATH')) {
-    die('Direct access not allowed');
-}
-
-class Am_Plugin_IncarcerationBot extends Am_Plugin
+/**
+ * Incarceration Bot Integration Plugin
+ * Checklist (mark tested items with x):
+ * [x] - template generated
+ * [ ] - go to aMember Cp -> Setup -> Plugins and enable this plugin
+ * [ ] - test user creation
+ *       try to create user in aMember and add access manually.
+ *       Login to Incarceration Bot and check that
+ *       that corresponding user appeared in users list and all necessary
+ *       fields transferred
+ * [ ] - test password generation: login to incarceration-bot as the new user
+ * [ ] - update user record in amember and try to login and view profile in the script
+ * [ ] - implement single-login
+ *
+ * @table integration
+ * @id incarceration_bot
+ * @title Incarceration Bot
+ * @visible_link https://github.com/kumpeapps/incarceration_bot
+ * @description Database integration for Incarceration Bot user authentication
+ * @different_groups 1
+ * @single_login 1
+ * @am_protect_api 6.0
+ **/
+class Am_Protect_IncarcerationBot extends Am_Protect_Databased
 {
-    const PLUGIN_STATUS = self::STATUS_PRODUCTION;
-    const PLUGIN_COMM = self::COMM_FREE;
-    const PLUGIN_REVISION = '1.0.0';
-    
-    protected $_configPrefix = 'misc.incarceration_bot.';
-    
-    function getTitle()
+    const PLUGIN_DATE = '$Date$';
+    const PLUGIN_REVISION = '6.3.19';
+
+    protected $guessTablePattern = "incarceration_bot_users";
+    protected $guessFieldsPattern = [
+        'username','email','password','is_active','amember_user_id','password_format','first_name','last_name'
+    ];
+    protected $groupMode = Am_Protect_Databased::GROUP_MULTI;
+
+    public function afterAddConfigItems($form)
     {
-        return "Incarceration Bot Integration";
-    }
-    
-    function getDescription()
-    {
-        return "Synchronizes aMember users with Incarceration Bot. Always syncs existing aMember passwords.";
-    }
-    
-    function _initSetupForm(Am_Form_Setup $form)
-    {
+        parent::afterAddConfigItems($form);
+        
+        // Add API sync configuration (optional)
         $form->addText('api_base_url', array('class' => 'am-el-wide'))
-            ->setLabel('API Base URL')
-            ->setValue('https://your-domain.com/api')
-            ->addRule('required');
+            ->setLabel('API Base URL (optional sync)')
+            ->setValue('https://your-domain.com/api');
             
         $form->addText('api_key', array('class' => 'am-el-wide'))
-            ->setLabel('API Key')
-            ->addRule('required');
+            ->setLabel('API Key (optional sync)');
             
-        // Use static groups - NO API calls during form setup
-        $staticGroups = array(
-            'user' => 'Regular User',
-            'admin' => 'Administrator', 
-            'moderator' => 'Moderator',
-            'locked' => 'Locked',
-            'banned' => 'Banned'
-        );
-        
-        $form->addSelect('default_group')
-            ->setLabel('Default Group for New Users')
-            ->loadOptions($staticGroups)
-            ->setValue('user');
-            
-        $form->addSelect('locked_group')
-            ->setLabel('Group for Locked Users')
-            ->loadOptions(array_merge(array('' => 'No Change'), $staticGroups))
-            ->setValue('locked');
-            
-        $form->addSelect('banned_group')
-            ->setLabel('Group for Banned Users') 
-            ->loadOptions(array_merge(array('' => 'No Change'), $staticGroups))
-            ->setValue('banned');
+        $form->addAdvCheckbox('enable_api_sync')
+            ->setLabel('Enable API Sync')
+            ->setValue(0);
             
         $form->addAdvCheckbox('debug_mode')
-            ->setLabel('Debug Mode');
+            ->setLabel('Debug Mode')
+            ->setValue(0);
     }
-    
-    function init()
+
+    public function getPasswordFormat()
+    {
+        return SavedPassTable::PASSWORD_PHPASS;
+    }
+
+    public function createTable()
+    {
+        $table = new Am_Protect_Table($this, $this->getDb(), '?_incarceration_bot_users', 'id');
+        $table->setFieldsMapping([
+            [Am_Protect_Table::FIELD_LOGIN, 'username'],
+            [Am_Protect_Table::FIELD_EMAIL, 'email'],
+            [Am_Protect_Table::FIELD_PASS, 'password'],
+            [':1', 'is_active'],
+            [Am_Protect_Table::FIELD_ID, 'amember_user_id'],
+            [':phpass', 'password_format'],
+            [Am_Protect_Table::FIELD_NAME_F, 'first_name'],
+            [Am_Protect_Table::FIELD_NAME_L, 'last_name'],
+        ]);
+        
+        $table->setGroupsTableConfig([
+            Am_Protect_Table::GROUP_TABLE => '?_incarceration_bot_user_groups',
+            Am_Protect_Table::GROUP_GID => 'group_id',
+            Am_Protect_Table::GROUP_UID => 'user_id',
+        ]);
+        
+        return $table;
+    }
+
+    public function getAvailableUserGroupsSql()
+    {
+        return "SELECT
+            id as id,
+            name as title,
+            CASE WHEN name IN ('banned', 'locked') THEN 1 ELSE 0 END as is_banned,
+            CASE WHEN name IN ('admin', 'administrator') THEN 1 ELSE 0 END as is_admin
+            FROM ?_incarceration_bot_groups";
+    }
+
+    public function createSessionTable()
+    {
+        $table = new Am_Protect_SessionTable(
+            $this, $this->getDb(),
+            '?_incarceration_bot_sessions', 'id');
+        $table->setTableConfig([
+                Am_Protect_SessionTable::FIELD_SID => 'session_id',
+                Am_Protect_SessionTable::FIELD_UID => 'user_id',
+                Am_Protect_SessionTable::FIELD_TOKEN => 'session_token',
+                Am_Protect_SessionTable::FIELD_IP => 'ip_address',
+                Am_Protect_SessionTable::FIELD_UA => 'user_agent',
+                Am_Protect_SessionTable::FIELD_CREATED => 'created_at',
+                Am_Protect_SessionTable::FIELD_CHANGED => 'updated_at',
+                Am_Protect_SessionTable::SESSION_COOKIE => $this->getSessionCookieName(),
+            ]
+        );
+        return $table;
+    }
+
+    function getSessionCookieName()
+    {
+        return 'incarceration_bot_session';
+    }
+
+    // Security: Generate cryptographically secure session ID
+    function generateSessionId()
+    {
+        if (function_exists('random_bytes')) {
+            return bin2hex(random_bytes(32)); // 64 character hex string
+        } else {
+            // Fallback for older PHP versions
+            return sha1(uniqid(mt_rand(), true) . microtime(true));
+        }
+    }
+
+    // Security: Enforce maximum session lifetime (24 hours)
+    function isSessionExpired($sessionCreated)
+    {
+        $maxLifetime = 24 * 60 * 60; // 24 hours in seconds
+        return (time() - strtotime($sessionCreated)) > $maxLifetime;
+    }
+
+    // Security: Check for duplicate user before creation
+    function checkDuplicateUser($username, $email)
+    {
+        try {
+            $sql = "SELECT COUNT(*) as count FROM ?_incarceration_bot_users WHERE username = ? OR email = ?";
+            $result = $this->getDb()->selectRow($sql, array($username, $email));
+            return $result['count'] > 0;
+        } catch (Exception $e) {
+            $this->debugLog("Error checking duplicate user: " . $e->getMessage());
+            return false; // Allow creation if check fails
+        }
+    }
+
+    public function init()
     {
         parent::init();
         
-        // Add event hooks only if plugin is configured
-        if ($this->isConfigured()) {
+        // Add hooks for API sync if enabled
+        if ($this->getConfig('enable_api_sync') && $this->isApiConfigured()) {
             $this->getDi()->hook->add(Am_Event::USER_AFTER_INSERT, array($this, 'onUserInsert'));
             $this->getDi()->hook->add(Am_Event::USER_AFTER_UPDATE, array($this, 'onUserUpdate'));
             $this->getDi()->hook->add(Am_Event::USER_AFTER_DELETE, array($this, 'onUserDelete'));
@@ -75,75 +161,86 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
     }
     
-    function isConfigured()
+    function isApiConfigured()
     {
         return strlen($this->getConfig('api_base_url')) > 0 && strlen($this->getConfig('api_key')) > 0;
     }
-    
-    // Event Handlers
+
+    // Optional API sync event handlers
     function onUserInsert(Am_Event $event)
     {
+        if (!$this->getConfig('enable_api_sync')) return;
+        
         $user = $event->getUser();
-        $this->debugLog("User Insert Event: {$user->login}");
-        $this->syncUserToBot($user, 'create');
+        $this->debugLog("User Insert: {$user->login}");
+        $this->syncUserToApi($user, 'create');
     }
     
     function onUserUpdate(Am_Event $event)
     {
+        if (!$this->getConfig('enable_api_sync')) return;
+        
         $user = $event->getUser();
-        $this->debugLog("User Update Event: {$user->login}");
-        $this->syncUserToBot($user, 'update');
+        $this->debugLog("User Update: {$user->login}");
+        $this->syncUserToApi($user, 'update');
     }
     
     function onUserDelete(Am_Event $event)
     {
+        if (!$this->getConfig('enable_api_sync')) return;
+        
         $user = $event->getUser();
-        $this->debugLog("User Delete Event: {$user->login}");
+        $this->debugLog("User Delete: {$user->login}");
         $this->makeApiCall('DELETE', "users/{$user->login}");
     }
     
     function onAccessInsert(Am_Event $event)
     {
+        if (!$this->getConfig('enable_api_sync')) return;
+        
         $access = $event->getAccess();
         $user = $this->getDi()->userTable->load($access->user_id);
-        $this->debugLog("Access Insert Event: {$user->login}");
-        $this->syncUserToBot($user, 'update');
+        $this->debugLog("Access granted to user {$user->login}");
+        $this->syncUserToApi($user, 'update');
     }
     
     function onAccessDelete(Am_Event $event)
     {
+        if (!$this->getConfig('enable_api_sync')) return;
+        
         $access = $event->getAccess();
         $user = $this->getDi()->userTable->load($access->user_id);
-        $this->debugLog("Access Delete Event: {$user->login}");
-        $this->syncUserToBot($user, 'update');
+        $this->debugLog("Access removed from user {$user->login}");
+        $this->syncUserToApi($user, 'update');
     }
     
-    // Core sync functionality
-    function syncUserToBot($user, $action = 'update')
+    // API sync methods (optional functionality)
+    function syncUserToApi($user, $action = 'update')
     {
         try {
-            // Get user's active products
+            // Security: Check for duplicate users before API sync
+            if ($action === 'create' && $this->checkDuplicateUser($user->login, $user->email)) {
+                $this->debugLog("Skipping user creation - duplicate found: {$user->login}");
+                return false;
+            }
+
+            // Get user's active products for group mapping
             $activeProducts = array();
             foreach ($user->getActiveAccess() as $access) {
                 $activeProducts[] = $access->product_id;
             }
             
-            // Map products to groups
-            $userGroups = $this->mapProductsToGroups($activeProducts);
-            
-            // Prepare user data - ALWAYS sync password, never generate random
             $userData = array(
                 'username' => $user->login,
                 'email' => $user->email,
                 'first_name' => $user->name_f ?: '',
                 'last_name' => $user->name_l ?: '',
-                'is_active' => !empty($activeProducts),
-                'groups' => $userGroups,
-                'password' => $user->pass,  // Always use aMember password
-                'password_format' => $this->detectPasswordFormat($user->pass)
+                'is_active' => $user->is_active,
+                'amember_user_id' => $user->user_id,
+                'groups' => $this->mapProductsToGroups($activeProducts)
             );
             
-            $this->debugLog("Syncing user data: " . json_encode($userData));
+            $this->debugLog("Syncing user to API: " . json_encode($userData));
             
             if ($action === 'create') {
                 $response = $this->makeApiCall('POST', 'users', $userData);
@@ -151,58 +248,21 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
                 $response = $this->makeApiCall('PUT', "users/{$user->login}", $userData);
             }
             
-            $this->debugLog("Sync response: " . json_encode($response));
+            $this->debugLog("API sync response: " . json_encode($response));
+            return true;
             
         } catch (Exception $e) {
-            $this->debugLog("Error syncing user {$user->login}: " . $e->getMessage());
+            $this->debugLog("Error syncing user {$user->login} to API: " . $e->getMessage());
+            return false;
         }
-    }
-    
-    function detectPasswordFormat($password)
-    {
-        if (empty($password)) {
-            return 'bcrypt'; // Default for new passwords
-        }
-        
-        // aMember typically uses phpass format
-        if (preg_match('/^\$P\$/', $password)) {
-            return 'phpass';
-        }
-        
-        // Check for other formats
-        if (preg_match('/^\$2[aby]\$/', $password)) {
-            return 'bcrypt';
-        }
-        
-        if (preg_match('/^\$argon2/', $password)) {
-            return 'argon2';
-        }
-        
-        if (preg_match('/^\$[1-6]\$/', $password)) {
-            return 'crypt';
-        }
-        
-        // MD5 format (32 hex chars) - DEPRECATED
-        if (preg_match('/^[a-fA-F0-9]{32}$/', $password)) {
-            $this->debugLog("WARNING: MD5 password format detected - this is insecure and deprecated");
-            return 'md5';
-        }
-        
-        // SHA1 format (40 hex chars) - DEPRECATED
-        if (preg_match('/^[a-fA-F0-9]{40}$/', $password)) {
-            $this->debugLog("WARNING: SHA1 password format detected - this is insecure and deprecated");
-            return 'sha1';
-        }
-        
-        // Default to phpass for aMember (most common)
-        return 'phpass';
     }
     
     function mapProductsToGroups($productIds)
     {
+        // Map aMember product IDs to Incarceration Bot groups
         $groupMapping = array(
-            // Add your product ID to group mappings here
             // Example: 1 => 'premium', 2 => 'admin'
+            // Configure this based on your aMember products
         );
         
         $groups = array();
@@ -212,9 +272,9 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             }
         }
         
-        // If no specific groups mapped, use default
+        // Default group if no specific mapping
         if (empty($groups)) {
-            $groups[] = $this->getConfig('default_group', 'user');
+            $groups[] = 'user';
         }
         
         return $groups;
@@ -225,6 +285,10 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         $url = rtrim($this->getConfig('api_base_url'), '/') . '/' . ltrim($endpoint, '/');
         $apiKey = $this->getConfig('api_key');
         
+        if (empty($apiKey)) {
+            throw new Exception("API key not configured");
+        }
+        
         $ch = curl_init();
         curl_setopt_array($ch, array(
             CURLOPT_URL => $url,
@@ -232,10 +296,15 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
             CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_HTTPHEADER => array(
                 'Authorization: Bearer ' . $apiKey,
-                'Content-Type: application/json'
+                'Content-Type: application/json',
+                'User-Agent: aMember-IncarcerationBot/1.0'
             ),
             CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_MAXREDIRS => 0
         ));
         
         if ($data && in_array($method, array('POST', 'PUT', 'PATCH'))) {
@@ -252,16 +321,68 @@ class Am_Plugin_IncarcerationBot extends Am_Plugin
         }
         
         if ($httpCode >= 400) {
-            throw new Exception("HTTP Error $httpCode: $response");
+            $errorDetail = $response ? " - Response: $response" : "";
+            throw new Exception("HTTP Error $httpCode$errorDetail");
         }
         
-        return json_decode($response, true);
+        $decoded = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception("Invalid JSON response: " . json_last_error_msg());
+        }
+        
+        return $decoded;
     }
     
     function debugLog($message)
     {
         if ($this->getConfig('debug_mode')) {
-            $this->getDi()->logger->info("Incarceration Bot: $message");
+            $timestamp = date('Y-m-d H:i:s');
+            $this->getDi()->logger->info("[$timestamp] Incarceration Bot: $message");
         }
+    }
+
+    // Enhanced error handling for database operations
+    function safeDbOperation($operation, $sql, $params = array())
+    {
+        try {
+            switch ($operation) {
+                case 'select':
+                    return $this->getDb()->selectRow($sql, $params);
+                case 'selectAll':
+                    return $this->getDb()->selectPage($sql, $params);
+                case 'execute':
+                    return $this->getDb()->query($sql, $params);
+                default:
+                    throw new Exception("Unknown operation: $operation");
+            }
+        } catch (Exception $e) {
+            $this->debugLog("Database operation failed: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    function getReadme()
+    {
+        return <<<CUT
+    Incarceration Bot Integration README
+
+    This plugin integrates aMember with Incarceration Bot system.
+
+    Setup:
+    1. Configure database connection in plugin settings
+    2. Set table prefix if needed
+    3. Optionally enable API sync for real-time updates
+    4. Test user creation and login
+
+    Tables created:
+    - {prefix}_incarceration_bot_users (user credentials)
+    - {prefix}_incarceration_bot_user_groups (group memberships)  
+    - {prefix}_incarceration_bot_sessions (session management)
+    - {prefix}_incarceration_bot_groups (available groups)
+
+    The plugin will automatically sync aMember users to the database
+    and optionally to the Incarceration Bot API if configured.
+
+CUT;
     }
 }

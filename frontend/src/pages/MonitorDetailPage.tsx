@@ -126,7 +126,7 @@ const MonitorDetailPage: React.FC = () => {
   
   // Monitor linking dialog state
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [availableMonitors] = useState<Monitor[]>([]);
+  const [availableMonitors, setAvailableMonitors] = useState<Monitor[]>([]);
   const [selectedLinkMonitor, setSelectedLinkMonitor] = useState<number | null>(null);
   const [linkReason, setLinkReason] = useState('');
   
@@ -243,6 +243,19 @@ const MonitorDetailPage: React.FC = () => {
       setInmateHistory(deduplicatedHistory);
     } catch (err) {
       console.error('Failed to fetch inmate links:', err);
+    }
+  };
+
+  const fetchAvailableMonitors = async () => {
+    try {
+      const response = await apiService.getMonitors();
+      // Filter out the current monitor from the list
+      const filtered = response.items.filter((mon: Monitor) => mon.id !== monitorId);
+      setError(null); // Clear any previous errors on success
+      setAvailableMonitors(filtered);
+    } catch (err) {
+      console.error('Failed to fetch available monitors:', err);
+      setError('Failed to load available monitors');
     }
   };
 
@@ -469,7 +482,10 @@ const MonitorDetailPage: React.FC = () => {
         <Box display="flex" gap={2}>
           <Button
             startIcon={<LinkIcon />}
-            onClick={() => setLinkDialogOpen(true)}
+            onClick={() => {
+              setLinkDialogOpen(true);
+              fetchAvailableMonitors();
+            }}
             variant="outlined"
           >
             Link Monitor
@@ -1039,6 +1055,11 @@ const MonitorDetailPage: React.FC = () => {
           <Typography variant="body2" color="textSecondary" mb={2}>
             Link another monitor record that represents the same person.
           </Typography>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
           <FormControl fullWidth margin="normal">
             <InputLabel>Select Monitor to Link</InputLabel>
             <Select
@@ -1046,11 +1067,17 @@ const MonitorDetailPage: React.FC = () => {
               onChange={(e) => setSelectedLinkMonitor(Number(e.target.value))}
               label="Select Monitor to Link"
             >
-              {availableMonitors.map((mon) => (
-                <MenuItem key={mon.id} value={mon.id}>
-                  {mon.name} ({mon.notify_address})
+              {availableMonitors.length === 0 ? (
+                <MenuItem disabled>
+                  No monitors available to link
                 </MenuItem>
-              ))}
+              ) : (
+                availableMonitors.map((mon) => (
+                  <MenuItem key={mon.id} value={mon.id}>
+                    {mon.name} ({mon.notify_address})
+                  </MenuItem>
+                ))
+              )}
             </Select>
           </FormControl>
           <TextField
