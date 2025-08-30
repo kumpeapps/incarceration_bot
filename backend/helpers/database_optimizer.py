@@ -361,18 +361,28 @@ class DatabaseOptimizer:
             
             # Try individual updates to avoid deadlocks completely
             batch_successful = 0
-            for inmate_id, release_date in batch:
+            for idx, (inmate_id, release_date) in enumerate(batch):
+                # Add a tiny delay between updates to reduce lock contention
+                if idx > 0:
+                    time.sleep(0.05)  # 50ms between updates
+                
                 retry_count = 0
                 max_retries = 3
                 update_success = False
                 
                 while not update_success and retry_count < max_retries:
                     try:
-                        # Set a short timeout for this individual operation
-                        session.execute(text("SET SESSION innodb_lock_wait_timeout = 30"))
+                        # Set a shorter timeout for this individual operation to fail fast
+                        session.execute(text("SET SESSION innodb_lock_wait_timeout = 20"))
+                        
+                        # Add a small random delay to prevent thundering herd on retries
+                        if retry_count > 0:
+                            import random
+                            random_delay = random.uniform(0.1, 0.5)
+                            time.sleep(random_delay)
                         
                         # Use simple individual update with immediate commit
-                        sql = text("UPDATE inmates SET release_date = :release_date WHERE idinmates = :inmate_id")
+                        sql = text("UPDATE inmates SET release_date = :release_date WHERE idinmates = :inmate_id LIMIT 1")
                         result = session.execute(sql, {"release_date": release_date, "inmate_id": inmate_id})
                         
                         if result.rowcount > 0:
@@ -396,9 +406,12 @@ class DatabaseOptimizer:
                             pass
                         
                         if "Lock wait timeout" in error_msg or "Deadlock" in error_msg:
-                            # Wait longer for lock issues
-                            wait_time = min(5 + (retry_count * 2), 15)
-                            logger.debug(f"Lock contention detected, waiting {wait_time}s before retry")
+                            # Wait longer for lock issues with some randomization
+                            base_wait = 3 + (retry_count * 2)
+                            import random
+                            random_factor = random.uniform(0.8, 1.2)  # ±20% randomization
+                            wait_time = min(base_wait * random_factor, 12)
+                            logger.debug(f"Lock contention detected, waiting {wait_time:.1f}s before retry")
                             time.sleep(wait_time)
                         elif "Lost connection" in error_msg or "Can't reconnect" in error_msg:
                             # Get fresh session for connection issues
