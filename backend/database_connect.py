@@ -50,10 +50,11 @@ def new_session() -> Session:
             'echo': False,  # Set to True for debugging SQL queries
             'connect_args': {
                 'connect_timeout': 60,     # Increased connection timeout
-                'read_timeout': 120,       # Increased read timeout for large operations  
-                'write_timeout': 120,      # Increased write timeout for large operations
+                'read_timeout': 300,       # 5 minutes for large batch operations  
+                'write_timeout': 300,      # 5 minutes for large batch operations
                 'autocommit': False,       # Explicit transaction control
-                'charset': 'utf8mb4'       # Full UTF-8 support
+                'charset': 'utf8mb4',      # Full UTF-8 support
+                'sql_mode': 'TRADITIONAL,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'
             }
         }
     else:

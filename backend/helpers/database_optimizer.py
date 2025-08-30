@@ -8,15 +8,58 @@ This module contains optimizations to reduce MariaDB binlog bloat by:
 4. Using more efficient upsert operations
 """
 
+import time
 from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError, DisconnectionError
 from typing import Dict, Any, Optional
 from loguru import logger
 
 
 class DatabaseOptimizer:
     """Optimized database operations to reduce binlog writes."""
+    
+    @staticmethod
+    def validate_connection(session: Session) -> bool:
+        """Validate that the database connection is still active."""
+        try:
+            session.execute(text("SELECT 1"))
+            return True
+        except (OperationalError, DisconnectionError) as e:
+            logger.warning(f"Database connection validation failed: {e}")
+            return False
+    
+    @staticmethod
+    def get_fresh_session(old_session: Session) -> Session:
+        """Get a fresh database session, closing the old one if needed."""
+        try:
+            old_session.close()
+        except Exception as e:
+            logger.warning(f"Error closing old session: {e}")
+        
+        from database_connect import new_session
+        new_sess = new_session()
+        
+        # Configure timeouts for the new session
+        DatabaseOptimizer.configure_session_timeouts(new_sess)
+        
+        logger.info("Created fresh database session with configured timeouts")
+        return new_sess
+    
+    @staticmethod
+    def configure_session_timeouts(session: Session):
+        """Configure MySQL session-level timeouts for batch operations."""
+        try:
+            # Set longer timeouts for this session
+            session.execute(text("SET SESSION wait_timeout = 3600"))  # 1 hour
+            session.execute(text("SET SESSION interactive_timeout = 3600"))  # 1 hour
+            session.execute(text("SET SESSION net_read_timeout = 300"))  # 5 minutes
+            session.execute(text("SET SESSION net_write_timeout = 300"))  # 5 minutes
+            logger.debug("Configured session timeouts for batch processing")
+        except Exception as e:
+            logger.warning(f"Could not configure session timeouts: {e}")
+            # Not critical, continue without timeout changes
     
     # Only update last_seen if more than 1 hour has passed
     LAST_SEEN_UPDATE_THRESHOLD = timedelta(hours=1)
@@ -71,14 +114,14 @@ class DatabaseOptimizer:
             session.commit()
     
     @staticmethod
-    def batch_upsert_inmates(session: Session, inmates_data: list[dict], batch_size: int = 100):
+    def batch_upsert_inmates(session: Session, inmates_data: list[dict], batch_size: int = 50):
         """
         Batch upsert inmates to reduce the number of database round trips.
         
         Args:
             session: SQLAlchemy session
             inmates_data: List of inmate dictionaries
-            batch_size: Number of records to process in each batch
+            batch_size: Number of records to process in each batch (reduced default for stability)
         """
         engine = session.get_bind()
         if engine.dialect.name != "mysql":
@@ -90,8 +133,24 @@ class DatabaseOptimizer:
         
         logger.info(f"Batch upserting {len(inmates_data)} inmates in batches of {batch_size}")
         
-        # Process in batches
+        # Validate connection before starting
+        if not DatabaseOptimizer.validate_connection(session):
+            logger.warning("Database connection invalid, creating fresh session")
+            session = DatabaseOptimizer.get_fresh_session(session)
+        
+        # Configure session timeouts for batch processing
+        DatabaseOptimizer.configure_session_timeouts(session)
+        
+        # Process in batches with connection validation
+        batch_success_count = 0
         for i in range(0, len(inmates_data), batch_size):
+            batch = inmates_data[i:i + batch_size]
+            batch_num = i//batch_size + 1
+            
+            # Validate connection before each batch
+            if not DatabaseOptimizer.validate_connection(session):
+                logger.warning(f"Connection lost before batch {batch_num}, reconnecting")
+                session = DatabaseOptimizer.get_fresh_session(session)
             batch = inmates_data[i:i + batch_size]
             
             # Build VALUES clause for batch insert
@@ -110,47 +169,117 @@ class DatabaseOptimizer:
                 if f'last_seen_{j}' not in params or params[f'last_seen_{j}'] is None:
                     params[f'last_seen_{j}'] = datetime.now()
                 
-                # Build the VALUES clause for this record
-                value_clause = f"(:{param_names['name']}, :{param_names['race']}, :{param_names['sex']}, :{param_names['cell_block']}, :{param_names['arrest_date']}, :{param_names['held_for_agency']}, :{param_names['mugshot']}, :{param_names['dob']}, :{param_names['hold_reasons']}, :{param_names['is_juvenile']}, :{param_names['release_date']}, :{param_names['in_custody_date']}, :{param_names['jail_id']}, :{param_names['hide_record']}, :{param_names['last_seen']})"
-                values_clauses.append(value_clause)
-            
-            # Execute batch insert
-            sql = text(f"""
-                INSERT INTO inmates (
-                    name, race, sex, cell_block, arrest_date, held_for_agency, 
-                    mugshot, dob, hold_reasons, is_juvenile, release_date, 
-                    in_custody_date, jail_id, hide_record, last_seen
-                ) VALUES {', '.join(values_clauses)}
-                ON DUPLICATE KEY UPDATE
-                    last_seen = CASE 
-                        WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
-                        THEN VALUES(last_seen)
-                        ELSE last_seen
-                    END,
-                    cell_block = VALUES(cell_block),
-                    arrest_date = VALUES(arrest_date),
-                    held_for_agency = VALUES(held_for_agency),
-                    mugshot = VALUES(mugshot),
-                    in_custody_date = VALUES(in_custody_date),
-                    release_date = VALUES(release_date),
-                    hold_reasons = VALUES(hold_reasons)
-            """)
-            
+            # Build the VALUES clause for this record
+            value_clause = f"(:{param_names['name']}, :{param_names['race']}, :{param_names['sex']}, :{param_names['cell_block']}, :{param_names['arrest_date']}, :{param_names['held_for_agency']}, :{param_names['mugshot']}, :{param_names['dob']}, :{param_names['hold_reasons']}, :{param_names['is_juvenile']}, :{param_names['release_date']}, :{param_names['in_custody_date']}, :{param_names['jail_id']}, :{param_names['hide_record']}, :{param_names['last_seen']})"
+            values_clauses.append(value_clause)
+        
+        # Build the SQL statement for this batch
+        sql = text(f"""
+            INSERT INTO inmates (
+                name, race, sex, cell_block, arrest_date, held_for_agency, 
+                mugshot, dob, hold_reasons, is_juvenile, release_date, 
+                in_custody_date, jail_id, hide_record, last_seen
+            ) VALUES {', '.join(values_clauses)}
+            ON DUPLICATE KEY UPDATE
+                last_seen = CASE 
+                    WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                    THEN VALUES(last_seen)
+                    ELSE last_seen
+                END,
+                cell_block = VALUES(cell_block),
+                arrest_date = VALUES(arrest_date),
+                held_for_agency = VALUES(held_for_agency),
+                mugshot = VALUES(mugshot),
+                in_custody_date = VALUES(in_custody_date),
+                release_date = VALUES(release_date),
+                hold_reasons = VALUES(hold_reasons)
+        """)
+        
+        # Execute batch insert with retry logic
+        batch_success = False
+        retry_count = 0
+        max_retries = 3
+        
+        while not batch_success and retry_count < max_retries:
             try:
                 session.execute(sql, params)
-                logger.debug(f"Successfully processed batch {i//batch_size + 1}")
+                batch_success = True
+                batch_success_count += 1
+                logger.debug(f"Successfully processed batch {batch_num}")
+                break
+            except (OperationalError, DisconnectionError) as e:
+                retry_count += 1
+                logger.error(f"Connection error in batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
+                
+                # Roll back and get fresh connection
+                try:
+                    session.rollback()
+                except:
+                    pass
+                
+                if retry_count < max_retries:
+                    session = DatabaseOptimizer.get_fresh_session(session)
+                    time.sleep(min(2 ** retry_count, 10))  # Exponential backoff, max 10 seconds
+                else:
+                    logger.error(f"Max retries reached for batch {batch_num}, falling back to individual inserts")
+                    break
             except Exception as e:
-                logger.error(f"Error in batch {i//batch_size + 1}: {e}")
-                # Fall back to individual inserts for this batch
-                for inmate_data in batch:
-                    try:
-                        DatabaseOptimizer.optimized_upsert_inmate(session, inmate_data, auto_commit=False)
-                    except Exception as individual_error:
-                        logger.error(f"Failed to insert individual inmate: {individual_error}")
+                retry_count += 1
+                logger.error(f"Error in batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
+                
+                try:
+                    session.rollback()
+                except:
+                    pass
+                    
+                if retry_count >= max_retries:
+                    logger.error(f"Max retries reached for batch {batch_num}, falling back to individual inserts")
+                    break
+                
+                time.sleep(min(2 ** retry_count, 10))  # Exponential backoff
         
-        # Commit all batches at once
-        session.commit()
-        logger.info(f"Completed batch upsert of {len(inmates_data)} inmates")
+        # If batch failed completely, fall back to individual inserts
+        if not batch_success:
+            logger.warning(f"Batch {batch_num} failed, processing {len(batch)} inmates individually")
+            for inmate_data in batch:
+                individual_success = False
+                individual_retry_count = 0
+                max_individual_retries = 2
+                
+                while not individual_success and individual_retry_count < max_individual_retries:
+                    try:
+                        # Validate connection before individual insert
+                        if not DatabaseOptimizer.validate_connection(session):
+                            session = DatabaseOptimizer.get_fresh_session(session)
+                        
+                        DatabaseOptimizer.optimized_upsert_inmate(session, inmate_data, auto_commit=False)
+                        individual_success = True
+                    except Exception as individual_error:
+                        individual_retry_count += 1
+                        logger.error(f"Failed to insert individual inmate (attempt {individual_retry_count}/{max_individual_retries}): {individual_error}")
+                        
+                        if "Lost connection" in str(individual_error) or "Can't reconnect" in str(individual_error):
+                            # Connection lost, create new session
+                            session = DatabaseOptimizer.get_fresh_session(session)
+                        elif individual_retry_count < max_individual_retries:
+                            # Other error, rollback and retry
+                            try:
+                                session.rollback()
+                            except:
+                                pass
+                            time.sleep(1)  # Brief pause before retry
+                        else:
+                            # Max retries reached, log and continue
+                            logger.error(f"Failed to insert inmate after {max_individual_retries} attempts: {inmate_data.get('name', 'unknown')}")
+        
+        # Commit all successful batches
+        try:
+            session.commit()
+            logger.info(f"Completed batch upsert of {len(inmates_data)} inmates ({batch_success_count} successful batches)")
+        except Exception as commit_error:
+            logger.error(f"Error during final commit: {commit_error}")
+            session.rollback()
+            raise
     
     @staticmethod
     def optimize_monitor_updates(session: Session, monitor_updates: list[tuple], batch_size: int = 50):
