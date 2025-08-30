@@ -14,8 +14,10 @@ from pathlib import Path
 # Add the app directory to Python path
 sys.path.insert(0, '/app')
 
-# Configure logging first
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging first with environment variable support
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, LOG_LEVEL, logging.INFO)
+logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Import from the alembic utils package  
