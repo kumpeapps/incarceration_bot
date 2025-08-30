@@ -9,6 +9,7 @@ from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
 from helpers.insert_ignore import upsert_inmate
+from helpers.database_optimizer import DatabaseOptimizer
 
 
 def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail: Jail):
@@ -127,20 +128,51 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
             for monitor in new_monitors:
                 session.add(monitor)
 
-        # Process inmates with bulk upsert for performance
+        # Process inmates with batch upsert for performance
         if inmates_to_insert:
-            logger.info(f"Processing {len(inmates_to_insert)} inmates with bulk upsert")
-            for inmate in inmates_to_insert:
-                # Use upsert to handle duplicates and update last_seen
-                upsert_inmate(session, inmate.to_dict())
-                logger.debug(f"Upserted inmate: {inmate.name}")
-
-        # Commit all changes at once
-        session.commit()
-        logger.info("Successfully committed all changes")
+            logger.info(f"Processing {len(inmates_to_insert)} inmates with optimized batch upsert")
+            
+            # Convert inmates to dictionaries for batch processing
+            inmates_data = [inmate.to_dict() for inmate in inmates_to_insert]
+            
+            # Use the optimized batch upsert method
+            try:
+                DatabaseOptimizer.batch_upsert_inmates(
+                    session=session, 
+                    inmates_data=inmates_data, 
+                    batch_size=50  # Smaller batch size for timeout prevention
+                )
+                logger.info("Successfully completed optimized batch upsert")
+            except Exception as batch_error:
+                logger.error(f"Batch upsert failed, falling back to individual upserts: {batch_error}")
+                
+                # Fallback to individual processing in smaller batches
+                batch_size = 50
+                total_batches = (len(inmates_to_insert) + batch_size - 1) // batch_size
+                
+                for i in range(0, len(inmates_to_insert), batch_size):
+                    batch = inmates_to_insert[i:i + batch_size]
+                    batch_num = (i // batch_size) + 1
+                    
+                    logger.info(f"Fallback batch {batch_num}/{total_batches} ({len(batch)} inmates)")
+                    
+                    for inmate in batch:
+                        try:
+                            upsert_inmate(session, inmate.to_dict())
+                        except Exception as inmate_error:
+                            logger.error(f"Failed to upsert inmate {inmate.name}: {inmate_error}")
+                    
+                    # Commit each batch
+                    try:
+                        session.commit()
+                        logger.debug(f"Committed fallback batch {batch_num}/{total_batches}")
+                    except Exception as commit_error:
+                        logger.error(f"Failed to commit fallback batch {batch_num}: {commit_error}")
+                        session.rollback()
+                        raise
 
     except Exception as error:
-        logger.error(f"Failed to commit changes: {error}")
+        logger.error(f"Failed to process inmates: {error}")
         session.rollback()
         raise
 
