@@ -179,10 +179,17 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
     # Check for released inmates (those no longer in jail)
     try:
         check_for_released_inmates(session, inmates, jail)
-        # Also check for released inmates in the main inmates table
-        update_release_dates_for_missing_inmates(session, inmates, jail)
-        # Note: batch_update_release_dates handles its own commits
-        logger.debug("Checked for released inmates and updated release dates with batch processing")
+        
+        # Determine if we should do release date processing based on system load
+        should_process_release_dates = len(inmates) < 500  # Skip for large jail rosters
+        
+        if should_process_release_dates:
+            # Use background-friendly processing for smaller jails
+            update_release_dates_for_missing_inmates_background(session, inmates, jail)
+            logger.debug("Checked for released inmates and processed release date updates in background mode")
+        else:
+            logger.info(f"Skipping release date processing for {jail.jail_name} (large roster: {len(inmates)} inmates) - will process in separate maintenance job")
+        
     except Exception as error:
         logger.error(f"Failed to check for released inmates: {error}")
         session.rollback()
@@ -295,6 +302,83 @@ def check_for_released_inmates(
         )
     else:
         logger.debug(f"No releases detected in {jail.jail_name}")
+
+
+def update_release_dates_for_missing_inmates_background(
+    session: Session, current_inmates: List[Inmate], jail: Jail
+):
+    """
+    Background-friendly version that updates release dates without blocking main processing.
+    Uses ultra-gentle database operations to avoid lock contention.
+    """
+    logger.debug(f"Background checking for inmates to update release dates in {jail.jail_name}")
+
+    # Get all inmates for this jail that don't have a release date and last_seen is not today
+    today = date.today()
+    today_start_dt = datetime.combine(today, datetime.min.time())  # Start of today as datetime
+    
+    inmates_to_check = (
+        session.query(Inmate)
+        .filter(
+            Inmate.jail_id == jail.jail_id,
+            Inmate.release_date.in_(["", None]),  # Blank or null release date
+            Inmate.last_seen < today_start_dt  # last_seen is before today
+        )
+        .all()
+    )
+
+    if not inmates_to_check:
+        logger.debug(f"No inmates need release date updates in {jail.jail_name}")
+        return
+
+    logger.info(f"Found {len(inmates_to_check)} inmates to check for background release date updates in {jail.jail_name}")
+
+    # Create a set of current inmate identifiers (name + arrest_date) for fast lookup
+    current_inmate_identifiers = {
+        (str(inmate.name).strip().lower(), inmate.arrest_date) for inmate in current_inmates
+    }
+    
+    logger.debug(f"Current scrape has {len(current_inmate_identifiers)} unique inmate records")
+    logger.debug(f"Background checking {len(inmates_to_check)} inmates with old last_seen dates")
+
+    # Collect release date updates for background processing
+    release_updates = []
+
+    for inmate in inmates_to_check:
+        inmate_name = str(inmate.name).strip().lower()
+        inmate_identifier = (inmate_name, inmate.arrest_date)
+
+        # Check if this specific incarceration (name + arrest_date) is still in current inmates list
+        if inmate_identifier not in current_inmate_identifiers:
+            # This specific incarceration not found in current scrape - likely released
+            # Use their last_seen date as the release date
+            if inmate.last_seen:
+                # Extract just the date part from the datetime object
+                release_date_str = inmate.last_seen.date().isoformat()
+            else:
+                # Fallback to today's date if no last_seen
+                release_date_str = today.isoformat()
+            
+            logger.debug(
+                f"Queuing background release date update for {inmate.name} (arrested: {inmate.arrest_date}) to {release_date_str}"
+            )
+            
+            release_updates.append((inmate.id, release_date_str))
+        else:
+            logger.debug(f"Inmate {inmate.name} (arrested: {inmate.arrest_date}) still in current roster, skipping release date update")
+
+    # Use background-friendly processing
+    if release_updates:
+        from helpers.database_optimizer import DatabaseOptimizer
+        try:
+            # Use background method with ultra-small batches
+            updated_count = DatabaseOptimizer.batch_update_release_dates_background(session, release_updates, batch_size=3)
+            logger.info(f"Background updated release dates for {updated_count} inmates in {jail.jail_name}")
+        except Exception as e:
+            logger.warning(f"Background release date processing encountered issues: {e}")
+            logger.info("Background processing will continue with remaining inmates")
+    else:
+        logger.debug(f"No background release date updates needed in {jail.jail_name}")
 
 
 def update_release_dates_for_missing_inmates(

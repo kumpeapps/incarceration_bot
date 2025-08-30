@@ -329,7 +329,71 @@ class DatabaseOptimizer:
         session.commit()
     
     @staticmethod
-    def batch_update_release_dates(session: Session, release_updates: list[tuple], batch_size: int = 10):
+    def batch_update_release_dates_background(session: Session, release_updates: list[tuple], batch_size: int = 5):
+        """
+        Background-friendly release date updates that avoid table locks.
+        Uses very small batches with longer delays to run without interfering with main processing.
+        
+        Args:
+            session: SQLAlchemy session
+            release_updates: List of (inmate_id, release_date) tuples
+            batch_size: Very small batch size to avoid locks
+        """
+        if not release_updates:
+            return 0
+        
+        logger.info(f"Background updating release dates for {len(release_updates)} inmates (non-blocking)")
+        
+        successful_updates = 0
+        
+        for i in range(0, len(release_updates), batch_size):
+            batch = release_updates[i:i + batch_size]
+            batch_num = i//batch_size + 1
+            total_batches = (len(release_updates) + batch_size - 1) // batch_size
+            
+            logger.debug(f"Background processing release date batch {batch_num}/{total_batches} ({len(batch)} inmates)")
+            
+            # Process each update with maximum gentleness
+            for idx, (inmate_id, release_date) in enumerate(batch):
+                # Longer delay between updates to be gentle on the database
+                if idx > 0:
+                    time.sleep(0.2)  # 200ms between updates
+                
+                try:
+                    # Use READ UNCOMMITTED to avoid lock conflicts
+                    session.execute(text("SET SESSION transaction_isolation = 'READ-UNCOMMITTED'"))
+                    session.execute(text("SET SESSION innodb_lock_wait_timeout = 5"))
+                    
+                    # Simple update with very short timeout
+                    sql = text("UPDATE inmates SET release_date = :release_date WHERE idinmates = :inmate_id LIMIT 1")
+                    result = session.execute(sql, {"release_date": release_date, "inmate_id": inmate_id})
+                    
+                    if result.rowcount > 0:
+                        session.commit()
+                        successful_updates += 1
+                        logger.trace(f"Background updated release date for inmate {inmate_id}")
+                    else:
+                        # Row might not exist or already updated
+                        session.rollback()
+                        
+                except Exception as e:
+                    logger.debug(f"Background update skipped for inmate {inmate_id}: {str(e)[:100]}")
+                    try:
+                        session.rollback()
+                    except:
+                        pass
+                    # Don't retry in background mode - just skip and continue
+            
+            # Longer pause between batches to be extra gentle
+            if batch_num < total_batches:
+                time.sleep(1.0)  # 1 second between batches
+            
+            # Log progress less frequently
+            if batch_num % 5 == 0 or batch_num == total_batches:
+                logger.info(f"Background release date progress: {successful_updates}/{len(release_updates)} completed")
+        
+        logger.info(f"Background release date updates completed: {successful_updates}/{len(release_updates)} successful")
+        return successful_updates
         """
         Batch update release dates to reduce database writes and prevent lock timeouts.
         Uses very small batches and immediate commits to prevent deadlocks.
