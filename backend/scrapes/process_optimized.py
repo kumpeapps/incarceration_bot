@@ -181,8 +181,8 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
         check_for_released_inmates(session, inmates, jail)
         # Also check for released inmates in the main inmates table
         update_release_dates_for_missing_inmates(session, inmates, jail)
-        session.commit()
-        logger.debug("Checked for released inmates and updated release dates")
+        # Note: batch_update_release_dates handles its own commits
+        logger.debug("Checked for released inmates and updated release dates with batch processing")
     except Exception as error:
         logger.error(f"Failed to check for released inmates: {error}")
         session.rollback()
@@ -339,7 +339,8 @@ def update_release_dates_for_missing_inmates(
     logger.debug(f"Current scrape has {len(current_inmate_identifiers)} unique inmate records")
     logger.debug(f"Checking {len(inmates_to_check)} inmates with old last_seen dates")
 
-    updated_count = 0
+    # Collect release date updates for batch processing
+    release_updates = []
 
     for inmate in inmates_to_check:
         inmate_name = str(inmate.name).strip().lower()
@@ -356,17 +357,39 @@ def update_release_dates_for_missing_inmates(
                 # Fallback to today's date if no last_seen
                 release_date_str = today.isoformat()
             
-            logger.info(
-                f"Setting release date for {inmate.name} (arrested: {inmate.arrest_date}) to {release_date_str} (last seen: {inmate.last_seen})"
+            logger.debug(
+                f"Queuing release date update for {inmate.name} (arrested: {inmate.arrest_date}) to {release_date_str} (last seen: {inmate.last_seen})"
             )
             
-            inmate.release_date = release_date_str
-            updated_count += 1
+            release_updates.append((inmate.id, release_date_str))
         else:
             logger.debug(f"Inmate {inmate.name} (arrested: {inmate.arrest_date}) still in current roster, skipping release date update")
 
-    if updated_count > 0:
-        logger.info(f"Updated release dates for {updated_count} inmates in {jail.jail_name}")
+    # Use batch update for better performance and reduced lock contention
+    if release_updates:
+        from helpers.database_optimizer import DatabaseOptimizer
+        try:
+            updated_count = DatabaseOptimizer.batch_update_release_dates(session, release_updates, batch_size=25)
+            logger.info(f"Updated release dates for {updated_count} inmates in {jail.jail_name}")
+        except Exception as e:
+            logger.error(f"Failed to batch update release dates: {e}")
+            # Fallback to individual updates
+            logger.warning("Falling back to individual release date updates")
+            updated_count = 0
+            for inmate_id, release_date_str in release_updates:
+                try:
+                    inmate = session.query(Inmate).filter(Inmate.id == inmate_id).first()
+                    if inmate:
+                        inmate.release_date = release_date_str
+                        session.commit()
+                        updated_count += 1
+                except Exception as individual_error:
+                    logger.error(f"Failed individual release date update for inmate {inmate_id}: {individual_error}")
+                    try:
+                        session.rollback()
+                    except:
+                        pass
+            logger.info(f"Individual fallback updated {updated_count} release dates")
     else:
         logger.debug(f"No release date updates needed in {jail.jail_name}")
 

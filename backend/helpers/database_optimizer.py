@@ -56,6 +56,8 @@ class DatabaseOptimizer:
             session.execute(text("SET SESSION interactive_timeout = 3600"))  # 1 hour
             session.execute(text("SET SESSION net_read_timeout = 300"))  # 5 minutes
             session.execute(text("SET SESSION net_write_timeout = 300"))  # 5 minutes
+            session.execute(text("SET SESSION innodb_lock_wait_timeout = 120"))  # 2 minutes for lock waits
+            session.execute(text("SET SESSION transaction_isolation = 'READ-COMMITTED'"))  # Reduce lock contention
             logger.debug("Configured session timeouts for batch processing")
         except Exception as e:
             logger.warning(f"Could not configure session timeouts: {e}")
@@ -303,28 +305,121 @@ class DatabaseOptimizer:
             # Build CASE statement for batch update
             when_clauses = []
             monitor_ids = []
-            params = {}
             
-            for j, (monitor_id, last_seen) in enumerate(batch):
-                when_clauses.append(f"WHEN id = :monitor_id_{j} THEN :last_seen_{j}")
-                params[f'monitor_id_{j}'] = monitor_id
-                params[f'last_seen_{j}'] = last_seen
-                monitor_ids.append(f":monitor_id_{j}")
+            for monitor_id, last_seen in batch:
+                when_clauses.append(f"WHEN {monitor_id} THEN '{last_seen}'")
+                monitor_ids.append(str(monitor_id))
             
+            # Execute batch update
             sql = text(f"""
                 UPDATE monitors 
-                SET last_seen_incarcerated = CASE 
+                SET last_seen_incarcerated = CASE id
                     {' '.join(when_clauses)}
                     ELSE last_seen_incarcerated
                 END
-                WHERE id IN ({', '.join(monitor_ids)})
-                AND (last_seen_incarcerated IS NULL OR last_seen_incarcerated < DATE_SUB(NOW(), INTERVAL 1 HOUR))
+                WHERE id IN ({','.join(monitor_ids)})
             """)
             
-            session.execute(sql, params)
+            try:
+                session.execute(sql)
+                logger.debug(f"Updated batch of {len(batch)} monitors")
+            except Exception as e:
+                logger.error(f"Error updating monitor batch: {e}")
         
         session.commit()
-        logger.debug(f"Completed batch update of {len(monitor_updates)} monitors")
+    
+    @staticmethod
+    def batch_update_release_dates(session: Session, release_updates: list[tuple], batch_size: int = 50):
+        """
+        Batch update release dates to reduce database writes and prevent lock timeouts.
+        
+        Args:
+            session: SQLAlchemy session
+            release_updates: List of (inmate_id, release_date) tuples
+            batch_size: Number of updates per batch
+        """
+        if not release_updates:
+            return
+        
+        logger.info(f"Batch updating release dates for {len(release_updates)} inmates")
+        
+        # Process in smaller batches to prevent lock timeouts
+        successful_updates = 0
+        
+        for i in range(0, len(release_updates), batch_size):
+            batch = release_updates[i:i + batch_size]
+            batch_num = i//batch_size + 1
+            
+            # Validate connection before each batch
+            if not DatabaseOptimizer.validate_connection(session):
+                logger.warning(f"Connection lost before release date batch {batch_num}, reconnecting")
+                session = DatabaseOptimizer.get_fresh_session(session)
+            
+            retry_count = 0
+            max_retries = 3
+            batch_success = False
+            
+            while not batch_success and retry_count < max_retries:
+                try:
+                    # Build CASE statement for batch update
+                    when_clauses = []
+                    inmate_ids = []
+                    
+                    for inmate_id, release_date in batch:
+                        when_clauses.append(f"WHEN {inmate_id} THEN '{release_date}'")
+                        inmate_ids.append(str(inmate_id))
+                    
+                    # Execute batch update with shorter timeout
+                    sql = text(f"""
+                        UPDATE inmates 
+                        SET release_date = CASE idinmates
+                            {' '.join(when_clauses)}
+                            ELSE release_date
+                        END
+                        WHERE idinmates IN ({','.join(inmate_ids)})
+                    """)
+                    
+                    session.execute(sql)
+                    session.commit()  # Commit each batch immediately
+                    successful_updates += len(batch)
+                    batch_success = True
+                    logger.debug(f"Updated release dates for batch {batch_num} ({len(batch)} inmates)")
+                    
+                except Exception as e:
+                    retry_count += 1
+                    logger.error(f"Error updating release date batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
+                    
+                    # Roll back and get fresh connection if needed
+                    try:
+                        session.rollback()
+                    except:
+                        pass
+                    
+                    if "Lock wait timeout" in str(e) or "Lost connection" in str(e):
+                        # Connection or lock issue, get fresh session
+                        session = DatabaseOptimizer.get_fresh_session(session)
+                        time.sleep(min(2 ** retry_count, 10))  # Exponential backoff
+                    elif retry_count >= max_retries:
+                        logger.error(f"Max retries reached for release date batch {batch_num}, falling back to individual updates")
+                        # Fallback to individual updates for this batch
+                        for inmate_id, release_date in batch:
+                            try:
+                                individual_sql = text("UPDATE inmates SET release_date = :release_date WHERE idinmates = :inmate_id")
+                                session.execute(individual_sql, {"release_date": release_date, "inmate_id": inmate_id})
+                                session.commit()
+                                successful_updates += 1
+                            except Exception as individual_error:
+                                logger.error(f"Failed individual release date update for inmate {inmate_id}: {individual_error}")
+                                try:
+                                    session.rollback()
+                                except:
+                                    pass
+                        batch_success = True  # Mark as handled
+                    else:
+                        time.sleep(min(2 ** retry_count, 5))  # Brief backoff for other errors
+        
+        logger.info(f"Successfully updated release dates for {successful_updates} inmates")
+        return successful_updates
 
 
 # Helper function to check if last_seen needs updating
