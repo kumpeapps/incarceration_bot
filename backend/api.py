@@ -13,6 +13,7 @@ from pydantic import BaseModel
 import jwt
 from jwt import InvalidTokenError
 from passlib.context import CryptContext
+from loguru import logger
 
 # Import existing models
 from models.Inmate import Inmate
@@ -27,6 +28,15 @@ from models.Session import Session as UserSession
 from helpers.user_group_service import UserGroupService
 from utils.master_user import MasterUser
 import database_connect as db
+
+# Configure logging with environment variable support
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+logger.remove()  # Remove default handler
+logger.add(
+    lambda msg: print(msg, end=""),  # Simple stdout handler
+    level=LOG_LEVEL,
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+)
 
 app = FastAPI(title="Incarceration Bot API", version="1.0.0")
 
@@ -484,17 +494,17 @@ async def get_inmates(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    print(f"🔥 ENTRY POINT: name='{name}', jail_id='{jail_id}', current_custody={current_custody}")
+    logger.debug(f"Inmates endpoint called - name='{name}', jail_id='{jail_id}', current_custody={current_custody}")
     from sqlalchemy import text
     
     # Allow showing current custody records without requiring other filters
     # But require at least one search filter for historical data
-    print(f"🚨 DEBUG INMATES ENDPOINT: name={name}, jail_id={jail_id}, current_custody={current_custody}")
-    print(f"🚨 DEBUG: any([name, jail_id]) = {any([name, jail_id])}")
+    logger.debug(f"Search parameters - name={name}, jail_id={jail_id}, current_custody={current_custody}")
+    logger.debug(f"Has search filters: {any([name, jail_id])}")
     
     # If no search filters and not current custody, return empty
     if not any([name, jail_id]) and current_custody is not True:
-        print("🚨 DEBUG: Returning empty response - no search filters and not current custody")
+        logger.debug("Returning empty response - no search filters and not current custody")
         return PaginatedResponse(
             items=[],
             total=0,

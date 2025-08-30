@@ -11,10 +11,14 @@ from datetime import datetime
 from database_connect import new_session
 from sqlalchemy import text
 import logging
+import os
 
-# Configure logging
+# Configure logging with environment variable support
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, LOG_LEVEL, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('maintenance_cleanup_locked.log'),

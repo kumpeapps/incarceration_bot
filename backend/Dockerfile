@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     make \
     libffi-dev \
+    nano \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt

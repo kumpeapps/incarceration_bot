@@ -12,9 +12,12 @@ from collections import defaultdict
 # Get the directory where this script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Configure logging
+# Configure logging with environment variable support
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, LOG_LEVEL, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(os.path.join(script_dir, 'generate_counties.log'), encoding='utf-8'),
