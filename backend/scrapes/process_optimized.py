@@ -369,7 +369,9 @@ def update_release_dates_for_missing_inmates(
     if release_updates:
         from helpers.database_optimizer import DatabaseOptimizer
         try:
-            updated_count = DatabaseOptimizer.batch_update_release_dates(session, release_updates, batch_size=25)
+            # Use very small batch size to prevent deadlocks on large updates
+            batch_size = 10 if len(release_updates) > 50 else 25
+            updated_count = DatabaseOptimizer.batch_update_release_dates(session, release_updates, batch_size=batch_size)
             logger.info(f"Updated release dates for {updated_count} inmates in {jail.jail_name}")
         except Exception as e:
             logger.error(f"Failed to batch update release dates: {e}")

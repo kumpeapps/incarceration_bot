@@ -329,96 +329,99 @@ class DatabaseOptimizer:
         session.commit()
     
     @staticmethod
-    def batch_update_release_dates(session: Session, release_updates: list[tuple], batch_size: int = 50):
+    def batch_update_release_dates(session: Session, release_updates: list[tuple], batch_size: int = 10):
         """
         Batch update release dates to reduce database writes and prevent lock timeouts.
+        Uses very small batches and immediate commits to prevent deadlocks.
         
         Args:
             session: SQLAlchemy session
             release_updates: List of (inmate_id, release_date) tuples
-            batch_size: Number of updates per batch
+            batch_size: Number of updates per batch (small to prevent locks)
         """
         if not release_updates:
             return
         
-        logger.info(f"Batch updating release dates for {len(release_updates)} inmates")
+        logger.info(f"Batch updating release dates for {len(release_updates)} inmates in batches of {batch_size}")
         
-        # Process in smaller batches to prevent lock timeouts
+        # Use very small batches to prevent lock contention
         successful_updates = 0
         
         for i in range(0, len(release_updates), batch_size):
             batch = release_updates[i:i + batch_size]
             batch_num = i//batch_size + 1
+            total_batches = (len(release_updates) + batch_size - 1) // batch_size
+            
+            logger.debug(f"Processing release date batch {batch_num}/{total_batches} ({len(batch)} inmates)")
             
             # Validate connection before each batch
             if not DatabaseOptimizer.validate_connection(session):
                 logger.warning(f"Connection lost before release date batch {batch_num}, reconnecting")
                 session = DatabaseOptimizer.get_fresh_session(session)
             
-            retry_count = 0
-            max_retries = 3
-            batch_success = False
-            
-            while not batch_success and retry_count < max_retries:
-                try:
-                    # Build CASE statement for batch update
-                    when_clauses = []
-                    inmate_ids = []
-                    
-                    for inmate_id, release_date in batch:
-                        when_clauses.append(f"WHEN {inmate_id} THEN '{release_date}'")
-                        inmate_ids.append(str(inmate_id))
-                    
-                    # Execute batch update with shorter timeout
-                    sql = text(f"""
-                        UPDATE inmates 
-                        SET release_date = CASE idinmates
-                            {' '.join(when_clauses)}
-                            ELSE release_date
-                        END
-                        WHERE idinmates IN ({','.join(inmate_ids)})
-                    """)
-                    
-                    session.execute(sql)
-                    session.commit()  # Commit each batch immediately
-                    successful_updates += len(batch)
-                    batch_success = True
-                    logger.debug(f"Updated release dates for batch {batch_num} ({len(batch)} inmates)")
-                    
-                except Exception as e:
-                    retry_count += 1
-                    logger.error(f"Error updating release date batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
-                    
-                    # Roll back and get fresh connection if needed
+            # Try individual updates to avoid deadlocks completely
+            batch_successful = 0
+            for inmate_id, release_date in batch:
+                retry_count = 0
+                max_retries = 3
+                update_success = False
+                
+                while not update_success and retry_count < max_retries:
                     try:
-                        session.rollback()
-                    except:
-                        pass
-                    
-                    if "Lock wait timeout" in str(e) or "Lost connection" in str(e):
-                        # Connection or lock issue, get fresh session
-                        session = DatabaseOptimizer.get_fresh_session(session)
-                        time.sleep(min(2 ** retry_count, 10))  # Exponential backoff
-                    elif retry_count >= max_retries:
-                        logger.error(f"Max retries reached for release date batch {batch_num}, falling back to individual updates")
-                        # Fallback to individual updates for this batch
-                        for inmate_id, release_date in batch:
-                            try:
-                                individual_sql = text("UPDATE inmates SET release_date = :release_date WHERE idinmates = :inmate_id")
-                                session.execute(individual_sql, {"release_date": release_date, "inmate_id": inmate_id})
-                                session.commit()
-                                successful_updates += 1
-                            except Exception as individual_error:
-                                logger.error(f"Failed individual release date update for inmate {inmate_id}: {individual_error}")
-                                try:
-                                    session.rollback()
-                                except:
-                                    pass
-                        batch_success = True  # Mark as handled
-                    else:
-                        time.sleep(min(2 ** retry_count, 5))  # Brief backoff for other errors
+                        # Set a short timeout for this individual operation
+                        session.execute(text("SET SESSION innodb_lock_wait_timeout = 30"))
+                        
+                        # Use simple individual update with immediate commit
+                        sql = text("UPDATE inmates SET release_date = :release_date WHERE idinmates = :inmate_id")
+                        result = session.execute(sql, {"release_date": release_date, "inmate_id": inmate_id})
+                        
+                        if result.rowcount > 0:
+                            session.commit()  # Commit immediately
+                            batch_successful += 1
+                            update_success = True
+                            logger.trace(f"Updated release date for inmate {inmate_id} to {release_date}")
+                        else:
+                            logger.warning(f"No rows updated for inmate {inmate_id}")
+                            update_success = True  # No need to retry if row doesn't exist
+                        
+                    except Exception as e:
+                        retry_count += 1
+                        error_msg = str(e)
+                        logger.warning(f"Error updating release date for inmate {inmate_id} (attempt {retry_count}/{max_retries}): {error_msg}")
+                        
+                        # Roll back this individual transaction
+                        try:
+                            session.rollback()
+                        except:
+                            pass
+                        
+                        if "Lock wait timeout" in error_msg or "Deadlock" in error_msg:
+                            # Wait longer for lock issues
+                            wait_time = min(5 + (retry_count * 2), 15)
+                            logger.debug(f"Lock contention detected, waiting {wait_time}s before retry")
+                            time.sleep(wait_time)
+                        elif "Lost connection" in error_msg or "Can't reconnect" in error_msg:
+                            # Get fresh session for connection issues
+                            session = DatabaseOptimizer.get_fresh_session(session)
+                        elif retry_count >= max_retries:
+                            logger.error(f"Failed to update release date for inmate {inmate_id} after {max_retries} attempts")
+                        else:
+                            # Brief pause for other errors
+                            time.sleep(1)
+            
+            successful_updates += batch_successful
+            
+            # Log progress more frequently for large updates
+            if len(release_updates) > 50:
+                # Log every 5 batches for large updates
+                if batch_num % 5 == 0 or batch_num == total_batches:
+                    logger.info(f"Release date update progress: {batch_num}/{total_batches} batches completed, {successful_updates} successful updates")
+            else:
+                # Log every 10 batches for smaller updates
+                if batch_num % 10 == 0 or batch_num == total_batches:
+                    logger.info(f"Release date update progress: {batch_num}/{total_batches} batches, {successful_updates} successful updates")
         
-        logger.info(f"Successfully updated release dates for {successful_updates} inmates")
+        logger.info(f"Completed release date updates: {successful_updates}/{len(release_updates)} successful")
         return successful_updates
 
 
