@@ -9,6 +9,7 @@ from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
 from helpers.insert_ignore import upsert_inmate
+from helpers.database_optimizer import DatabaseOptimizer
 
 
 def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail: Jail):
@@ -127,30 +128,68 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
             for monitor in new_monitors:
                 session.add(monitor)
 
-        # Process inmates with bulk upsert for performance
+        # Process inmates with batch upsert for performance
         if inmates_to_insert:
-            logger.info(f"Processing {len(inmates_to_insert)} inmates with bulk upsert")
-            for inmate in inmates_to_insert:
-                # Use upsert to handle duplicates and update last_seen
-                upsert_inmate(session, inmate.to_dict())
-                logger.debug(f"Upserted inmate: {inmate.name}")
-
-        # Commit all changes at once
-        session.commit()
-        logger.info("Successfully committed all changes")
+            logger.info(f"Processing {len(inmates_to_insert)} inmates with optimized batch upsert")
+            
+            # Convert inmates to dictionaries for batch processing
+            inmates_data = [inmate.to_dict() for inmate in inmates_to_insert]
+            
+            # Use the optimized batch upsert method
+            try:
+                DatabaseOptimizer.batch_upsert_inmates(
+                    session=session, 
+                    inmates_data=inmates_data, 
+                    batch_size=50  # Smaller batch size for timeout prevention
+                )
+                logger.info("Successfully completed optimized batch upsert")
+            except Exception as batch_error:
+                logger.error(f"Batch upsert failed, falling back to individual upserts: {batch_error}")
+                
+                # Fallback to individual processing in smaller batches
+                batch_size = 50
+                total_batches = (len(inmates_to_insert) + batch_size - 1) // batch_size
+                
+                for i in range(0, len(inmates_to_insert), batch_size):
+                    batch = inmates_to_insert[i:i + batch_size]
+                    batch_num = (i // batch_size) + 1
+                    
+                    logger.info(f"Fallback batch {batch_num}/{total_batches} ({len(batch)} inmates)")
+                    
+                    for inmate in batch:
+                        try:
+                            upsert_inmate(session, inmate.to_dict())
+                        except Exception as inmate_error:
+                            logger.error(f"Failed to upsert inmate {inmate.name}: {inmate_error}")
+                    
+                    # Commit each batch
+                    try:
+                        session.commit()
+                        logger.debug(f"Committed fallback batch {batch_num}/{total_batches}")
+                    except Exception as commit_error:
+                        logger.error(f"Failed to commit fallback batch {batch_num}: {commit_error}")
+                        session.rollback()
+                        raise
 
     except Exception as error:
-        logger.error(f"Failed to commit changes: {error}")
+        logger.error(f"Failed to process inmates: {error}")
         session.rollback()
         raise
 
     # Check for released inmates (those no longer in jail)
     try:
         check_for_released_inmates(session, inmates, jail)
-        # Also check for released inmates in the main inmates table
-        update_release_dates_for_missing_inmates(session, inmates, jail)
-        session.commit()
-        logger.debug("Checked for released inmates and updated release dates")
+        
+        # Determine if we should do release date processing based on system load
+        should_process_release_dates = len(inmates) < 500  # Skip for large jail rosters
+        
+        if should_process_release_dates:
+            # Use background-friendly processing for smaller jails
+            update_release_dates_for_missing_inmates_background(session, inmates, jail)
+            logger.debug("Checked for released inmates and processed release date updates in background mode")
+        else:
+            logger.info(f"Skipping release date processing for {jail.jail_name} (large roster: {len(inmates)} inmates) - will process in separate maintenance job")
+        
     except Exception as error:
         logger.error(f"Failed to check for released inmates: {error}")
         session.rollback()
@@ -265,6 +304,83 @@ def check_for_released_inmates(
         logger.debug(f"No releases detected in {jail.jail_name}")
 
 
+def update_release_dates_for_missing_inmates_background(
+    session: Session, current_inmates: List[Inmate], jail: Jail
+):
+    """
+    Background-friendly version that updates release dates without blocking main processing.
+    Uses ultra-gentle database operations to avoid lock contention.
+    """
+    logger.debug(f"Background checking for inmates to update release dates in {jail.jail_name}")
+
+    # Get all inmates for this jail that don't have a release date and last_seen is not today
+    today = date.today()
+    today_start_dt = datetime.combine(today, datetime.min.time())  # Start of today as datetime
+    
+    inmates_to_check = (
+        session.query(Inmate)
+        .filter(
+            Inmate.jail_id == jail.jail_id,
+            Inmate.release_date.in_(["", None]),  # Blank or null release date
+            Inmate.last_seen < today_start_dt  # last_seen is before today
+        )
+        .all()
+    )
+
+    if not inmates_to_check:
+        logger.debug(f"No inmates need release date updates in {jail.jail_name}")
+        return
+
+    logger.info(f"Found {len(inmates_to_check)} inmates to check for background release date updates in {jail.jail_name}")
+
+    # Create a set of current inmate identifiers (name + arrest_date) for fast lookup
+    current_inmate_identifiers = {
+        (str(inmate.name).strip().lower(), inmate.arrest_date) for inmate in current_inmates
+    }
+    
+    logger.debug(f"Current scrape has {len(current_inmate_identifiers)} unique inmate records")
+    logger.debug(f"Background checking {len(inmates_to_check)} inmates with old last_seen dates")
+
+    # Collect release date updates for background processing
+    release_updates = []
+
+    for inmate in inmates_to_check:
+        inmate_name = str(inmate.name).strip().lower()
+        inmate_identifier = (inmate_name, inmate.arrest_date)
+
+        # Check if this specific incarceration (name + arrest_date) is still in current inmates list
+        if inmate_identifier not in current_inmate_identifiers:
+            # This specific incarceration not found in current scrape - likely released
+            # Use their last_seen date as the release date
+            if inmate.last_seen:
+                # Extract just the date part from the datetime object
+                release_date_str = inmate.last_seen.date().isoformat()
+            else:
+                # Fallback to today's date if no last_seen
+                release_date_str = today.isoformat()
+            
+            logger.debug(
+                f"Queuing background release date update for {inmate.name} (arrested: {inmate.arrest_date}) to {release_date_str}"
+            )
+            
+            release_updates.append((inmate.id, release_date_str))
+        else:
+            logger.debug(f"Inmate {inmate.name} (arrested: {inmate.arrest_date}) still in current roster, skipping release date update")
+
+    # Use background-friendly processing
+    if release_updates:
+        from helpers.database_optimizer import DatabaseOptimizer
+        try:
+            # Use background method with ultra-small batches
+            updated_count = DatabaseOptimizer.batch_update_release_dates_background(session, release_updates, batch_size=3)
+            logger.info(f"Background updated release dates for {updated_count} inmates in {jail.jail_name}")
+        except Exception as e:
+            logger.warning(f"Background release date processing encountered issues: {e}")
+            logger.info("Background processing will continue with remaining inmates")
+    else:
+        logger.debug(f"No background release date updates needed in {jail.jail_name}")
+
+
 def update_release_dates_for_missing_inmates(
     session: Session, current_inmates: List[Inmate], jail: Jail
 ):
@@ -307,7 +423,8 @@ def update_release_dates_for_missing_inmates(
     logger.debug(f"Current scrape has {len(current_inmate_identifiers)} unique inmate records")
     logger.debug(f"Checking {len(inmates_to_check)} inmates with old last_seen dates")
 
-    updated_count = 0
+    # Collect release date updates for batch processing
+    release_updates = []
 
     for inmate in inmates_to_check:
         inmate_name = str(inmate.name).strip().lower()
@@ -324,17 +441,41 @@ def update_release_dates_for_missing_inmates(
                 # Fallback to today's date if no last_seen
                 release_date_str = today.isoformat()
             
-            logger.info(
-                f"Setting release date for {inmate.name} (arrested: {inmate.arrest_date}) to {release_date_str} (last seen: {inmate.last_seen})"
+            logger.debug(
+                f"Queuing release date update for {inmate.name} (arrested: {inmate.arrest_date}) to {release_date_str} (last seen: {inmate.last_seen})"
             )
             
-            inmate.release_date = release_date_str
-            updated_count += 1
+            release_updates.append((inmate.id, release_date_str))
         else:
             logger.debug(f"Inmate {inmate.name} (arrested: {inmate.arrest_date}) still in current roster, skipping release date update")
 
-    if updated_count > 0:
-        logger.info(f"Updated release dates for {updated_count} inmates in {jail.jail_name}")
+    # Use batch update for better performance and reduced lock contention
+    if release_updates:
+        from helpers.database_optimizer import DatabaseOptimizer
+        try:
+            # Use very small batch size to prevent deadlocks on large updates
+            batch_size = 10 if len(release_updates) > 50 else 25
+            updated_count = DatabaseOptimizer.batch_update_release_dates(session, release_updates, batch_size=batch_size)
+            logger.info(f"Updated release dates for {updated_count} inmates in {jail.jail_name}")
+        except Exception as e:
+            logger.error(f"Failed to batch update release dates: {e}")
+            # Fallback to individual updates
+            logger.warning("Falling back to individual release date updates")
+            updated_count = 0
+            for inmate_id, release_date_str in release_updates:
+                try:
+                    inmate = session.query(Inmate).filter(Inmate.id == inmate_id).first()
+                    if inmate:
+                        inmate.release_date = release_date_str
+                        session.commit()
+                        updated_count += 1
+                except Exception as individual_error:
+                    logger.error(f"Failed individual release date update for inmate {inmate_id}: {individual_error}")
+                    try:
+                        session.rollback()
+                    except:
+                        pass
+            logger.info(f"Individual fallback updated {updated_count} release dates")
     else:
         logger.debug(f"No release date updates needed in {jail.jail_name}")
 
