@@ -5,7 +5,6 @@ Provides various maintenance operations that can be run from Docker
 """
 
 import sys
-import os
 import argparse
 from datetime import datetime
 from database_connect import new_session
@@ -20,11 +19,7 @@ except ImportError as e:
     logging.warning("Could not import alembic utils: %s", e)
     alembic_utils_available = False
 
-# Configure logging with environment variable support
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-log_level = getattr(logging, LOG_LEVEL, logging.INFO)
-
-logging.basicConfig(level=log_level, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
 def status_check():

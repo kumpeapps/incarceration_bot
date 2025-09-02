@@ -8,7 +8,6 @@ import requests
 import json
 import csv
 import logging
-import os
 from typing import List, Dict, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -17,12 +16,9 @@ import urllib3
 # Disable SSL warnings for testing purposes
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Configure logging with environment variable support
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-log_level = getattr(logging, LOG_LEVEL, logging.INFO)
-
+# Configure logging
 logging.basicConfig(
-    level=log_level,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('zuercher_discovery.log', encoding='utf-8'),
