@@ -171,108 +171,108 @@ class DatabaseOptimizer:
                 if f'last_seen_{j}' not in params or params[f'last_seen_{j}'] is None:
                     params[f'last_seen_{j}'] = datetime.now()
                 
-            # Build the VALUES clause for this record
-            value_clause = f"(:{param_names['name']}, :{param_names['race']}, :{param_names['sex']}, :{param_names['cell_block']}, :{param_names['arrest_date']}, :{param_names['held_for_agency']}, :{param_names['mugshot']}, :{param_names['dob']}, :{param_names['hold_reasons']}, :{param_names['is_juvenile']}, :{param_names['release_date']}, :{param_names['in_custody_date']}, :{param_names['jail_id']}, :{param_names['hide_record']}, :{param_names['last_seen']})"
-            values_clauses.append(value_clause)
+                # Build the VALUES clause for this record
+                value_clause = f"(:{param_names['name']}, :{param_names['race']}, :{param_names['sex']}, :{param_names['cell_block']}, :{param_names['arrest_date']}, :{param_names['held_for_agency']}, :{param_names['mugshot']}, :{param_names['dob']}, :{param_names['hold_reasons']}, :{param_names['is_juvenile']}, :{param_names['release_date']}, :{param_names['in_custody_date']}, :{param_names['jail_id']}, :{param_names['hide_record']}, :{param_names['last_seen']})"
+                values_clauses.append(value_clause)
         
-        # Build the SQL statement for this batch
-        sql = text(f"""
-            INSERT INTO inmates (
-                name, race, sex, cell_block, arrest_date, held_for_agency, 
-                mugshot, dob, hold_reasons, is_juvenile, release_date, 
-                in_custody_date, jail_id, hide_record, last_seen
-            ) VALUES {', '.join(values_clauses)}
-            ON DUPLICATE KEY UPDATE
-                last_seen = CASE 
-                    WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
-                    THEN VALUES(last_seen)
-                    ELSE last_seen
-                END,
-                cell_block = VALUES(cell_block),
-                arrest_date = VALUES(arrest_date),
-                held_for_agency = VALUES(held_for_agency),
-                mugshot = VALUES(mugshot),
-                in_custody_date = VALUES(in_custody_date),
-                release_date = VALUES(release_date),
-                hold_reasons = VALUES(hold_reasons)
-        """)
-        
-        # Execute batch insert with retry logic
-        batch_success = False
-        retry_count = 0
-        max_retries = 3
-        
-        while not batch_success and retry_count < max_retries:
-            try:
-                session.execute(sql, params)
-                batch_success = True
-                batch_success_count += 1
-                logger.debug(f"Successfully processed batch {batch_num}")
-                break
-            except (OperationalError, DisconnectionError) as e:
-                retry_count += 1
-                logger.error(f"Connection error in batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
-                
-                # Roll back and get fresh connection
+            # Build the SQL statement for this batch
+            sql = text(f"""
+                INSERT INTO inmates (
+                    name, race, sex, cell_block, arrest_date, held_for_agency, 
+                    mugshot, dob, hold_reasons, is_juvenile, release_date, 
+                    in_custody_date, jail_id, hide_record, last_seen
+                ) VALUES {', '.join(values_clauses)}
+                ON DUPLICATE KEY UPDATE
+                    last_seen = CASE 
+                        WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                        THEN VALUES(last_seen)
+                        ELSE last_seen
+                    END,
+                    cell_block = VALUES(cell_block),
+                    arrest_date = VALUES(arrest_date),
+                    held_for_agency = VALUES(held_for_agency),
+                    mugshot = VALUES(mugshot),
+                    in_custody_date = VALUES(in_custody_date),
+                    release_date = VALUES(release_date),
+                    hold_reasons = VALUES(hold_reasons)
+            """)
+            
+            # Execute batch insert with retry logic
+            batch_success = False
+            retry_count = 0
+            max_retries = 3
+            
+            while not batch_success and retry_count < max_retries:
                 try:
-                    session.rollback()
-                except:
-                    pass
-                
-                if retry_count < max_retries:
-                    session = DatabaseOptimizer.get_fresh_session(session)
-                    time.sleep(min(2 ** retry_count, 10))  # Exponential backoff, max 10 seconds
-                else:
-                    logger.error(f"Max retries reached for batch {batch_num}, falling back to individual inserts")
+                    session.execute(sql, params)
+                    batch_success = True
+                    batch_success_count += 1
+                    logger.debug(f"Successfully processed batch {batch_num}")
                     break
-            except Exception as e:
-                retry_count += 1
-                logger.error(f"Error in batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
-                
-                try:
-                    session.rollback()
-                except:
-                    pass
+                except (OperationalError, DisconnectionError) as e:
+                    retry_count += 1
+                    logger.error(f"Connection error in batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
                     
-                if retry_count >= max_retries:
-                    logger.error(f"Max retries reached for batch {batch_num}, falling back to individual inserts")
-                    break
-                
-                time.sleep(min(2 ** retry_count, 10))  # Exponential backoff
-        
-        # If batch failed completely, fall back to individual inserts
-        if not batch_success:
-            logger.warning(f"Batch {batch_num} failed, processing {len(batch)} inmates individually")
-            for inmate_data in batch:
-                individual_success = False
-                individual_retry_count = 0
-                max_individual_retries = 2
-                
-                while not individual_success and individual_retry_count < max_individual_retries:
+                    # Roll back and get fresh connection
                     try:
-                        # Validate connection before individual insert
-                        if not DatabaseOptimizer.validate_connection(session):
-                            session = DatabaseOptimizer.get_fresh_session(session)
+                        session.rollback()
+                    except:
+                        pass
+                    
+                    if retry_count < max_retries:
+                        session = DatabaseOptimizer.get_fresh_session(session)
+                        time.sleep(min(2 ** retry_count, 10))  # Exponential backoff, max 10 seconds
+                    else:
+                        logger.error(f"Max retries reached for batch {batch_num}, falling back to individual inserts")
+                        break
+                except Exception as e:
+                    retry_count += 1
+                    logger.error(f"Error in batch {batch_num} (attempt {retry_count}/{max_retries}): {e}")
+                    
+                    try:
+                        session.rollback()
+                    except:
+                        pass
                         
-                        DatabaseOptimizer.optimized_upsert_inmate(session, inmate_data, auto_commit=False)
-                        individual_success = True
-                    except Exception as individual_error:
-                        individual_retry_count += 1
-                        logger.error(f"Failed to insert individual inmate (attempt {individual_retry_count}/{max_individual_retries}): {individual_error}")
-                        
-                        if "Lost connection" in str(individual_error) or "Can't reconnect" in str(individual_error):
-                            # Connection lost, create new session
-                            session = DatabaseOptimizer.get_fresh_session(session)
-                        elif individual_retry_count < max_individual_retries:
-                            # Other error, rollback and retry
-                            try:
-                                session.rollback()
-                            except:
-                                pass
-                            time.sleep(1)  # Brief pause before retry
-                        else:
-                            # Max retries reached, log and continue
-                            logger.error(f"Failed to insert inmate after {max_individual_retries} attempts: {inmate_data.get('name', 'unknown')}")
+                    if retry_count >= max_retries:
+                        logger.error(f"Max retries reached for batch {batch_num}, falling back to individual inserts")
+                        break
+                    
+                    time.sleep(min(2 ** retry_count, 10))  # Exponential backoff
+            
+            # If batch failed completely, fall back to individual inserts
+            if not batch_success:
+                logger.warning(f"Batch {batch_num} failed, processing {len(batch)} inmates individually")
+                for inmate_data in batch:
+                    individual_success = False
+                    individual_retry_count = 0
+                    max_individual_retries = 2
+                    
+                    while not individual_success and individual_retry_count < max_individual_retries:
+                        try:
+                            # Validate connection before individual insert
+                            if not DatabaseOptimizer.validate_connection(session):
+                                session = DatabaseOptimizer.get_fresh_session(session)
+                            
+                            DatabaseOptimizer.optimized_upsert_inmate(session, inmate_data, auto_commit=False)
+                            individual_success = True
+                        except Exception as individual_error:
+                            individual_retry_count += 1
+                            logger.error(f"Failed to insert individual inmate (attempt {individual_retry_count}/{max_individual_retries}): {individual_error}")
+                            
+                            if "Lost connection" in str(individual_error) or "Can't reconnect" in str(individual_error):
+                                # Connection lost, create new session
+                                session = DatabaseOptimizer.get_fresh_session(session)
+                            elif individual_retry_count < max_individual_retries:
+                                # Other error, rollback and retry
+                                try:
+                                    session.rollback()
+                                except:
+                                    pass
+                                time.sleep(1)  # Brief pause before retry
+                            else:
+                                # Max retries reached, log and continue
+                                logger.error(f"Failed to insert inmate after {max_individual_retries} attempts: {inmate_data.get('name', 'unknown')}")
         
         # Commit all successful batches
         try:
@@ -282,7 +282,7 @@ class DatabaseOptimizer:
             logger.error(f"Error during final commit: {commit_error}")
             session.rollback()
             raise
-    
+
     @staticmethod
     def optimize_monitor_updates(session: Session, monitor_updates: list[tuple], batch_size: int = 50):
         """
