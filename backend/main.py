@@ -63,27 +63,18 @@ def enable_jails(session: Session):
 def run():
     """Run the bot"""
     logger.info("Starting Bot")
-    
-    # Create initial session only for getting jail list and setup
-    setup_session = db.new_session()
-    try:
-        if enable_jails_containing:
-            enable_jails(setup_session)
-        jails = setup_session.query(Jail).filter(Jail.active == True).all()  # type: ignore
-        logger.debug(jails)
-    finally:
-        setup_session.close()
-    
+    session = db.new_session()
+    if enable_jails_containing:
+        enable_jails(session)
+    jails = session.query(Jail).filter(Jail.active == True).all()  # type: ignore
+    logger.debug(jails)
     jails_completed = 0
     jails_total = len(jails)
     success_jails = []
     failed_jails = []
     logger.info(f"Running for {jails_total} Jails")
-    
     for jail in jails:
-        # Create a new isolated session for each jail to prevent lock conflicts
-        jail_session = db.new_session()
-        
+
         def run_scrape(scrape_method, session, jail):
             nonlocal jails_completed
             logger.debug(
@@ -93,48 +84,34 @@ def run():
                 scrape_method(session, jail)
                 jails_completed += 1
                 success_jails.append(jail.jail_name)
-                logger.info(f"✅ Successfully completed {jail.jail_name}")
             except Exception:
-                logger.exception(f"❌ Failed to scrape {jail.jail_name}")
+                logger.exception(f"Failed to scrape {jail.jail_name}")
                 failed_jails.append(jail.jail_name)
-            finally:
-                # Ensure session is properly closed after each jail
-                try:
-                    session.close()
-                    logger.debug(f"🔒 Closed database session for {jail.jail_name}")
-                except Exception as e:
-                    logger.warning(f"Warning: Could not close session for {jail.jail_name}: {e}")
 
         logger.debug(f"Preparing {jail.jail_name}")
         if jail.scrape_system == "zuercherportal":
             logger.debug(
                 f"If scraping system: Scraping {jail.jail_name} with Zuercher Portal"
             )
-            run_scrape(scrape_zuercherportal, jail_session, jail)
+            run_scrape(scrape_zuercherportal, session, jail)
         elif jail.scrape_system == "washington_so_ar":
             logger.debug(
                 f"If scraping system: Scraping {jail.jail_name} with Washington SO AR"
             )
-            run_scrape(scrape_washington_so_ar_optimized, jail_session, jail)
+            run_scrape(scrape_washington_so_ar_optimized, session, jail)
         elif jail.scrape_system == "crawford_so_ar":
             logger.debug(
                 f"If scraping system: Scraping {jail.jail_name} with Crawford SO AR"
             )
-            run_scrape(scrape_crawford_so_ar, jail_session, jail)
+            run_scrape(scrape_crawford_so_ar, session, jail)
         elif jail.scrape_system == "aiken_so_sc":
             logger.debug(
                 f"If scraping system: Scraping {jail.jail_name} with Aiken County SC (Optimized)"
             )
-            run_scrape(scrape_aiken_so_sc_optimized, jail_session, jail)
+            run_scrape(scrape_aiken_so_sc_optimized, session, jail)
         logger.info(f"Completed {jails_completed}/{jails_total} Jails")
-    
-    # Handle cleanup with a separate session
-    cleanup_session = db.new_session()
-    try:
-        # delete_old_mugshots(cleanup_session)
-        pass  # Commented out as in original
-    finally:
-        cleanup_session.close()
+    # delete_old_mugshots(session)
+    session.close()
     if HEARTBEAT_WEBHOOK:
         logger.info("Sending Webhook Notification")
         if jails_completed == jails_total:
@@ -179,14 +156,9 @@ if __name__ == "__main__":
     logger.add(sys.stdout, level=LOG_LEVEL)
     if LOG_FILE:
         logger.add(LOG_FILE, level=LOG_LEVEL)
-    
-    # Use isolated session for jail database updates
-    update_session = db.new_session()
-    try:
-        update_jails_db(update_session)
-    finally:
-        update_session.close()
-    
+    session = db.new_session()
+    update_jails_db(session)
+    session.close()
     if is_on_demand:
         logger.info("Running in On Demand Mode.")
         run()
