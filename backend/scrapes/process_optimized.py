@@ -145,15 +145,16 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
         raise
 
     # Check for released inmates (those no longer in jail)
-    try:
-        check_for_released_inmates(session, inmates, jail)
-        # Also check for released inmates in the main inmates table
-        update_release_dates_for_missing_inmates(session, inmates, jail)
-        session.commit()
-        logger.debug("Checked for released inmates and updated release dates")
-    except Exception as error:
-        logger.error(f"Failed to check for released inmates: {error}")
-        session.rollback()
+    # TEMPORARILY DISABLED - Commenting out to test before fixing
+    # try:
+    #     check_for_released_inmates(session, inmates, jail)
+    #     # Also check for released inmates in the main inmates table
+    #     update_release_dates_for_missing_inmates(session, inmates, jail)
+    #     session.commit()
+    #     logger.debug("Checked for released inmates and updated release dates")
+    # except Exception as error:
+    #     logger.error(f"Failed to check for released inmates: {error}")
+    #     session.rollback()
 
     # Update jail's last scrape date
     try:
