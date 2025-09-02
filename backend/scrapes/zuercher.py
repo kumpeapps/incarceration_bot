@@ -1,5 +1,6 @@
 """Scrape Zuercher Portal for Inmate Records"""
 
+import os
 from datetime import datetime, date
 import zuercherportal_api as zuercherportal  # type: ignore
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from models.Jail import Jail
 from models.Inmate import Inmate
 from scrapes.process_optimized import process_scrape_data
 
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 def scrape_zuercherportal(session: Session, jail: Jail):
     """
@@ -22,7 +24,7 @@ def scrape_zuercherportal(session: Session, jail: Jail):
         None
     """
     logger.info(f"Scraping {jail.jail_name}")
-    jail_api = zuercherportal.API(jail.jail_id, return_object=True)
+    jail_api = zuercherportal.API(jail.jail_id, return_object=True, log_level=LOG_LEVEL)
     inmate_data: ZuercherportalResponse = jail_api.inmate_search(records_per_page=10000)
     inmate_list: list[Inmate] = []
     for inmate in inmate_data.records:
