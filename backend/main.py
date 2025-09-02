@@ -123,16 +123,21 @@ def run():
                 f"Partial Success ({jails_total - jails_completed} Degraded)"
             )
 
-        requests.post(
-            HEARTBEAT_WEBHOOK,
-            json={
-                "message": notify_message,
-                "jails_completed": success_jails,
-                "failed_jails": failed_jails,
-            },
-            headers={"Content-Type": "application/json"},
-            timeout=5,
-        )
+        try:
+            response = requests.post(
+                HEARTBEAT_WEBHOOK,
+                json={
+                    "message": notify_message,
+                    "jails_completed": success_jails,
+                    "failed_jails": failed_jails,
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=30,  # Increased timeout to 30 seconds
+            )
+            logger.success(f"Webhook notification sent successfully (status: {response.status_code})")
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to send webhook notification (non-critical): {e}")
+            # Don't let webhook failures crash the bot
     logger.success("Bot Finished")
 
 
