@@ -70,9 +70,10 @@ def bulk_upsert_with_prefilter(session: Session, inmates: List[Inmate], batch_si
     
     # Get existing inmates for this jail with the key fields we use for uniqueness
     # This is much faster than ON DUPLICATE KEY UPDATE with large datasets
+    # Updated to match the new optimized constraint order: jail_id, arrest_date, name, dob, sex, race
     existing_query = text("""
-        SELECT CONCAT(name, '|', COALESCE(race, ''), '|', COALESCE(dob, ''), '|', 
-                     COALESCE(sex, ''), '|', COALESCE(arrest_date, ''), '|', jail_id) as unique_key,
+        SELECT CONCAT(jail_id, '|', COALESCE(arrest_date, ''), '|', name, '|', 
+                     COALESCE(dob, ''), '|', COALESCE(sex, ''), '|', COALESCE(race, '')) as unique_key,
                last_seen
         FROM inmates 
         WHERE jail_id = :jail_id
@@ -97,8 +98,9 @@ def bulk_upsert_with_prefilter(session: Session, inmates: List[Inmate], batch_si
     update_inmates = []
     
     for inmate in inmates:
-        # Create the same unique key format
-        unique_key = f"{inmate.name}|{inmate.race or ''}|{inmate.dob or ''}|{inmate.sex or ''}|{inmate.arrest_date or ''}|{inmate.jail_id}"
+        # Create the same unique key format to match the new constraint order
+        arrest_date_str = inmate.arrest_date.isoformat() if inmate.arrest_date else ''
+        unique_key = f"{inmate.jail_id}|{arrest_date_str}|{inmate.name}|{inmate.dob or ''}|{inmate.sex or ''}|{inmate.race or ''}"
         
         if unique_key in existing_inmates:
             # Check if we need to update last_seen (only if more than 1 hour old)
