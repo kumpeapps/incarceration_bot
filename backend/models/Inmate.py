@@ -38,13 +38,13 @@ class Inmate(Base):  # type: ignore
     __tablename__ = "inmates"
     __table_args__ = (
         UniqueConstraint(
-            "name",
-            "race",
-            "dob",
-            "sex", 
-            "arrest_date",
             "jail_id",
-            name="unique_inmate_new",
+            "arrest_date", 
+            "name",
+            "dob",
+            "sex",
+            "race",
+            name="unique_inmate_optimized",
         ),
     )
 

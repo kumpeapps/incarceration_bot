@@ -14,7 +14,7 @@ from helpers.insert_ignore import upsert_inmate
 
 def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int = 50):
     """
-    Perform bulk upsert of inmates with batching for better performance.
+    Perform bulk upsert of inmates with pre-filtering for large database optimization.
     
     Args:
         session (Session): SQLAlchemy session for database operations.
@@ -30,105 +30,22 @@ def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int
             total_inmates_in_db = result.count if result else 0
             logger.info(f"Database contains {total_inmates_in_db:,} total inmates")
             
-            # Adjust batch size based on database size
-            if total_inmates_in_db > 1000000:  # 1M+ records
+            # For large databases, pre-filter existing records to reduce ON DUPLICATE KEY UPDATE load
+            if total_inmates_in_db > 100000:  # 100K+ records
+                logger.info("Large database detected - using pre-filtering optimization")
+                bulk_upsert_with_prefilter(session, inmates, batch_size)
+                return
+            
+            # Adjust batch size based on database size for smaller databases
+            if total_inmates_in_db > 50000:  # 50K+ records
                 batch_size = 25
-                logger.info(f"Large database detected, reducing batch size to {batch_size}")
-            elif total_inmates_in_db > 500000:  # 500K+ records
-                batch_size = 40
-                logger.info(f"Medium database detected, adjusting batch size to {batch_size}")
+                logger.info(f"Medium database detected, reducing batch size to {batch_size}")
                 
         except Exception as db_check_error:
             logger.warning(f"Could not check database size: {db_check_error}")
         
-        # Use MySQL's bulk INSERT ... ON DUPLICATE KEY UPDATE
-        logger.info(f"Using MySQL bulk upsert for {len(inmates)} inmates in batches of {batch_size}")
-        
-        # Process in batches to avoid memory issues and long-running transactions
-        for i in range(0, len(inmates), batch_size):
-            batch_start_time = datetime.now()
-            batch = inmates[i:i + batch_size]
-            batch_num = i//batch_size + 1
-            total_batches = (len(inmates) + batch_size - 1) // batch_size
-            
-            logger.info(f"Processing batch {batch_num}/{total_batches}: inmates {i+1} to {min(i+batch_size, len(inmates))}")
-            
-            # Prepare batch data
-            batch_data = []
-            for inmate in batch:
-                data = inmate.to_dict()
-                if 'last_seen' not in data or data['last_seen'] is None:
-                    data['last_seen'] = datetime.now()
-                batch_data.append(data)
-            
-            logger.debug(f"Prepared {len(batch_data)} inmate records for batch {batch_num}")
-            
-            # Create bulk upsert SQL
-            sql = text("""
-                INSERT INTO inmates (
-                    name, race, sex, cell_block, arrest_date, held_for_agency, 
-                    mugshot, dob, hold_reasons, is_juvenile, release_date, 
-                    in_custody_date, jail_id, hide_record, last_seen
-                ) VALUES (
-                    :name, :race, :sex, :cell_block, :arrest_date, :held_for_agency,
-                    :mugshot, :dob, :hold_reasons, :is_juvenile, :release_date,
-                    :in_custody_date, :jail_id, :hide_record, :last_seen
-                )
-                ON DUPLICATE KEY UPDATE
-                    last_seen = CASE 
-                        WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
-                        THEN VALUES(last_seen)
-                        ELSE last_seen
-                    END,
-                    cell_block = VALUES(cell_block),
-                    arrest_date = VALUES(arrest_date),
-                    held_for_agency = VALUES(held_for_agency),
-                    mugshot = VALUES(mugshot),
-                    in_custody_date = VALUES(in_custody_date),
-                    release_date = VALUES(release_date),
-                    hold_reasons = VALUES(hold_reasons)
-            """)
-            
-            try:
-                # Execute the batch with timing
-                logger.debug(f"Executing SQL for batch {batch_num}...")
-                query_start_time = datetime.now()
-                session.execute(sql, batch_data)
-                query_end_time = datetime.now()
-                query_duration = (query_end_time - query_start_time).total_seconds()
-                
-                batch_end_time = datetime.now()
-                batch_duration = (batch_end_time - batch_start_time).total_seconds()
-                
-                logger.info(f"Batch {batch_num}/{total_batches} completed in {batch_duration:.2f}s (SQL: {query_duration:.2f}s)")
-                
-                # If query took too long, reduce batch size for remaining batches
-                if query_duration > 30 and batch_size > 10:
-                    batch_size = max(10, batch_size // 2)
-                    logger.warning(f"Slow query detected ({query_duration:.2f}s), reducing batch size to {batch_size}")
-                    
-            except Exception as error:
-                batch_end_time = datetime.now()
-                batch_duration = (batch_end_time - batch_start_time).total_seconds()
-                logger.error(f"Failed to process batch {batch_num} after {batch_duration:.2f}s: {error}")
-                
-                # Fallback to individual upserts for this batch
-                logger.info(f"Falling back to individual upserts for batch {batch_num}")
-                individual_start_time = datetime.now()
-                
-                for j, inmate in enumerate(batch):
-                    try:
-                        upsert_inmate(session, inmate.to_dict())
-                        if (j + 1) % 10 == 0:
-                            logger.debug(f"Individual upsert progress: {j+1}/{len(batch)} inmates")
-                    except Exception as individual_error:
-                        logger.error(f"Failed to upsert inmate {inmate.name}: {individual_error}")
-                
-                individual_end_time = datetime.now()
-                individual_duration = (individual_end_time - individual_start_time).total_seconds()
-                logger.info(f"Individual upserts for batch {batch_num} completed in {individual_duration:.2f}s")
-                        
-        logger.info(f"Completed bulk upsert of {len(inmates)} inmates")
+        # Use standard bulk upsert for smaller databases
+        standard_bulk_upsert(session, inmates, batch_size)
         
     else:
         # Fallback to individual upserts for non-MySQL databases
@@ -138,6 +55,261 @@ def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int
                 upsert_inmate(session, inmate.to_dict())
             except Exception as error:
                 logger.error(f"Failed to upsert inmate {inmate.name}: {error}")
+
+
+def bulk_upsert_with_prefilter(session: Session, inmates: List[Inmate], batch_size: int = 50):
+    """
+    Optimized bulk upsert that pre-filters existing records to minimize ON DUPLICATE KEY UPDATE operations.
+    """
+    jail_id = inmates[0].jail_id if inmates else None
+    if not jail_id:
+        logger.error("No jail_id found for inmates")
+        return
+        
+    logger.info(f"Pre-filtering existing records for jail {jail_id}")
+    
+    # Get existing inmates for this jail with the key fields we use for uniqueness
+    # This is much faster than ON DUPLICATE KEY UPDATE with large datasets
+    existing_query = text("""
+        SELECT CONCAT(name, '|', COALESCE(race, ''), '|', COALESCE(dob, ''), '|', 
+                     COALESCE(sex, ''), '|', COALESCE(arrest_date, ''), '|', jail_id) as unique_key,
+               last_seen
+        FROM inmates 
+        WHERE jail_id = :jail_id
+    """)
+    
+    prefilter_start = datetime.now()
+    existing_result = session.execute(existing_query, {"jail_id": jail_id}).fetchall()
+    prefilter_end = datetime.now()
+    prefilter_duration = (prefilter_end - prefilter_start).total_seconds()
+    
+    logger.info(f"Pre-filter query completed in {prefilter_duration:.2f}s, found {len(existing_result)} existing records")
+    
+    # Create lookup set for existing records
+    existing_inmates = {}
+    for row in existing_result:
+        unique_key = row[0]
+        last_seen = row[1]
+        existing_inmates[unique_key] = last_seen
+    
+    # Separate inmates into new vs existing
+    new_inmates = []
+    update_inmates = []
+    
+    for inmate in inmates:
+        # Create the same unique key format
+        unique_key = f"{inmate.name}|{inmate.race or ''}|{inmate.dob or ''}|{inmate.sex or ''}|{inmate.arrest_date or ''}|{inmate.jail_id}"
+        
+        if unique_key in existing_inmates:
+            # Check if we need to update last_seen (only if more than 1 hour old)
+            existing_last_seen = existing_inmates[unique_key]
+            if existing_last_seen is None or (datetime.now() - existing_last_seen).total_seconds() > 3600:
+                update_inmates.append(inmate)
+        else:
+            new_inmates.append(inmate)
+    
+    logger.info(f"Pre-filter results: {len(new_inmates)} new inmates, {len(update_inmates)} to update")
+    
+    # Process new inmates with simple INSERT
+    if new_inmates:
+        logger.info(f"Inserting {len(new_inmates)} new inmates")
+        insert_new_inmates(session, new_inmates, batch_size)
+    
+    # Process updates with targeted UPDATE
+    if update_inmates:
+        logger.info(f"Updating last_seen for {len(update_inmates)} existing inmates")
+        update_existing_inmates(session, update_inmates, batch_size)
+
+
+def insert_new_inmates(session: Session, inmates: List[Inmate], batch_size: int):
+    """Simple INSERT for new inmates (no duplicate checking needed)."""
+    for i in range(0, len(inmates), batch_size):
+        batch = inmates[i:i + batch_size]
+        batch_num = i//batch_size + 1
+        total_batches = (len(inmates) + batch_size - 1) // batch_size
+        
+        logger.info(f"Inserting batch {batch_num}/{total_batches}: {len(batch)} new inmates")
+        
+        batch_data = []
+        for inmate in batch:
+            data = inmate.to_dict()
+            if 'last_seen' not in data or data['last_seen'] is None:
+                data['last_seen'] = datetime.now()
+            batch_data.append(data)
+        
+        sql = text("""
+            INSERT INTO inmates (
+                name, race, sex, cell_block, arrest_date, held_for_agency, 
+                mugshot, dob, hold_reasons, is_juvenile, release_date, 
+                in_custody_date, jail_id, hide_record, last_seen
+            ) VALUES (
+                :name, :race, :sex, :cell_block, :arrest_date, :held_for_agency,
+                :mugshot, :dob, :hold_reasons, :is_juvenile, :release_date,
+                :in_custody_date, :jail_id, :hide_record, :last_seen
+            )
+        """)
+        
+        try:
+            start_time = datetime.now()
+            session.execute(sql, batch_data)
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            logger.info(f"Insert batch {batch_num} completed in {duration:.2f}s")
+        except Exception as error:
+            logger.error(f"Failed to insert batch {batch_num}: {error}")
+
+
+def update_existing_inmates(session: Session, inmates: List[Inmate], batch_size: int):
+    """Targeted UPDATE for existing inmates that need last_seen updates."""
+    for i in range(0, len(inmates), batch_size):
+        batch = inmates[i:i + batch_size]
+        batch_num = i//batch_size + 1
+        total_batches = (len(inmates) + batch_size - 1) // batch_size
+        
+        logger.info(f"Updating batch {batch_num}/{total_batches}: {len(batch)} existing inmates")
+        
+        # Build UPDATE with multiple WHERE conditions
+        update_cases = []
+        params = {"current_time": datetime.now()}
+        
+        for j, inmate in enumerate(batch):
+            param_prefix = f"inmate_{j}_"
+            update_cases.append(f"""
+                (name = :{param_prefix}name AND race = :{param_prefix}race AND 
+                 dob = :{param_prefix}dob AND sex = :{param_prefix}sex AND 
+                 arrest_date = :{param_prefix}arrest_date AND jail_id = :{param_prefix}jail_id)
+            """)
+            
+            params.update({
+                f"{param_prefix}name": inmate.name,
+                f"{param_prefix}race": inmate.race,
+                f"{param_prefix}dob": inmate.dob,
+                f"{param_prefix}sex": inmate.sex,
+                f"{param_prefix}arrest_date": inmate.arrest_date,
+                f"{param_prefix}jail_id": inmate.jail_id,
+            })
+        
+        sql = text(f"""
+            UPDATE inmates 
+            SET last_seen = :current_time,
+                cell_block = CASE 
+                    {' '.join([f"WHEN {case} THEN :{f'inmate_{j}_'}cell_block" for j, case in enumerate(update_cases)])}
+                    ELSE cell_block END,
+                held_for_agency = CASE 
+                    {' '.join([f"WHEN {case} THEN :{f'inmate_{j}_'}held_for_agency" for j, case in enumerate(update_cases)])}
+                    ELSE held_for_agency END
+            WHERE ({' OR '.join(update_cases)})
+              AND (last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR))
+        """)
+        
+        # Add the dynamic field values
+        for j, inmate in enumerate(batch):
+            param_prefix = f"inmate_{j}_"
+            params.update({
+                f"{param_prefix}cell_block": inmate.cell_block,
+                f"{param_prefix}held_for_agency": inmate.held_for_agency,
+            })
+        
+        try:
+            start_time = datetime.now()
+            result = session.execute(sql, params)
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            updated_count = result.rowcount
+            logger.info(f"Update batch {batch_num} completed in {duration:.2f}s, updated {updated_count} records")
+        except Exception as error:
+            logger.error(f"Failed to update batch {batch_num}: {error}")
+
+
+def standard_bulk_upsert(session: Session, inmates: List[Inmate], batch_size: int):
+    """Original bulk upsert logic for smaller databases."""
+    logger.info(f"Using standard MySQL bulk upsert for {len(inmates)} inmates in batches of {batch_size}")
+    
+    # Process in batches to avoid memory issues and long-running transactions
+    for i in range(0, len(inmates), batch_size):
+        batch_start_time = datetime.now()
+        batch = inmates[i:i + batch_size]
+        batch_num = i//batch_size + 1
+        total_batches = (len(inmates) + batch_size - 1) // batch_size
+        
+        logger.info(f"Processing batch {batch_num}/{total_batches}: inmates {i+1} to {min(i+batch_size, len(inmates))}")
+        
+        # Prepare batch data
+        batch_data = []
+        for inmate in batch:
+            data = inmate.to_dict()
+            if 'last_seen' not in data or data['last_seen'] is None:
+                data['last_seen'] = datetime.now()
+            batch_data.append(data)
+        
+        logger.debug(f"Prepared {len(batch_data)} inmate records for batch {batch_num}")
+        
+        # Create bulk upsert SQL
+        sql = text("""
+            INSERT INTO inmates (
+                name, race, sex, cell_block, arrest_date, held_for_agency, 
+                mugshot, dob, hold_reasons, is_juvenile, release_date, 
+                in_custody_date, jail_id, hide_record, last_seen
+            ) VALUES (
+                :name, :race, :sex, :cell_block, :arrest_date, :held_for_agency,
+                :mugshot, :dob, :hold_reasons, :is_juvenile, :release_date,
+                :in_custody_date, :jail_id, :hide_record, :last_seen
+            )
+            ON DUPLICATE KEY UPDATE
+                last_seen = CASE 
+                    WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                    THEN VALUES(last_seen)
+                    ELSE last_seen
+                END,
+                cell_block = VALUES(cell_block),
+                arrest_date = VALUES(arrest_date),
+                held_for_agency = VALUES(held_for_agency),
+                mugshot = VALUES(mugshot),
+                in_custody_date = VALUES(in_custody_date),
+                release_date = VALUES(release_date),
+                hold_reasons = VALUES(hold_reasons)
+        """)
+        
+        try:
+            # Execute the batch with timing
+            logger.debug(f"Executing SQL for batch {batch_num}...")
+            query_start_time = datetime.now()
+            session.execute(sql, batch_data)
+            query_end_time = datetime.now()
+            query_duration = (query_end_time - query_start_time).total_seconds()
+            
+            batch_end_time = datetime.now()
+            batch_duration = (batch_end_time - batch_start_time).total_seconds()
+            
+            logger.info(f"Batch {batch_num}/{total_batches} completed in {batch_duration:.2f}s (SQL: {query_duration:.2f}s)")
+            
+            # If query took too long, reduce batch size for remaining batches
+            if query_duration > 30 and batch_size > 10:
+                batch_size = max(10, batch_size // 2)
+                logger.warning(f"Slow query detected ({query_duration:.2f}s), reducing batch size to {batch_size}")
+                
+        except Exception as error:
+            batch_end_time = datetime.now()
+            batch_duration = (batch_end_time - batch_start_time).total_seconds()
+            logger.error(f"Failed to process batch {batch_num} after {batch_duration:.2f}s: {error}")
+            
+            # Fallback to individual upserts for this batch
+            logger.info(f"Falling back to individual upserts for batch {batch_num}")
+            individual_start_time = datetime.now()
+            
+            for j, inmate in enumerate(batch):
+                try:
+                    upsert_inmate(session, inmate.to_dict())
+                    if (j + 1) % 10 == 0:
+                        logger.debug(f"Individual upsert progress: {j+1}/{len(batch)} inmates")
+                except Exception as individual_error:
+                    logger.error(f"Failed to upsert inmate {inmate.name}: {individual_error}")
+            
+            individual_end_time = datetime.now()
+            individual_duration = (individual_end_time - individual_start_time).total_seconds()
+            logger.info(f"Individual upserts for batch {batch_num} completed in {individual_duration:.2f}s")
+                    
+    logger.info(f"Completed bulk upsert of {len(inmates)} inmates")
 
 
 def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail: Jail):
