@@ -37,40 +37,8 @@ database_uri: str = os.getenv("DATABASE_URI", get_database_uri())
 Base = declarative_base()
 
 def new_session() -> Session:
-    """Create a new session with optimized settings for concurrent processing"""
-    # Add connection pooling and isolation settings to prevent lock conflicts
-    if db_type == 'mysql':
-        # MySQL-specific optimizations for concurrent processing
-        engine_kwargs = {
-            'pool_size': 10,  # Larger pool for concurrent operations
-            'max_overflow': 20,  # Additional connections when needed
-            'pool_timeout': 30,  # Timeout waiting for connection
-            'pool_recycle': 3600,  # Recycle connections every hour
-            'isolation_level': 'READ_COMMITTED',  # Reduce lock contention
-            'echo': False,  # Set to True for debugging SQL queries
-            'connect_args': {
-                'connect_timeout': 10,  # Connection timeout
-                'read_timeout': 30,     # Read timeout
-                'write_timeout': 30,    # Write timeout
-                'autocommit': False,    # Explicit transaction control
-                'charset': 'utf8mb4'    # Full UTF-8 support
-            }
-        }
-    else:
-        # Default settings for other databases
-        engine_kwargs = {
-            'pool_size': 5,
-            'max_overflow': 10,
-            'pool_timeout': 30,
-            'pool_recycle': 3600
-        }
-    
-    db = create_engine(database_uri, **engine_kwargs)
+    """Create a new session"""
+    db = create_engine(database_uri)
     Base.metadata.create_all(db)
-    Session = sessionmaker(
-        bind=db, 
-        expire_on_commit=False,  # Don't expire objects after commit
-        autoflush=True,          # Auto-flush before queries
-        autocommit=False         # Explicit transaction control
-    )
+    Session = sessionmaker(bind=db)
     return Session()
