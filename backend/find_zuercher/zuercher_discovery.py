@@ -17,13 +17,10 @@ import urllib3
 # Disable SSL warnings for testing purposes
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Configure logging with environment variable support
+# Configure logging
 script_dir = os.path.dirname(os.path.abspath(__file__))
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-log_level = getattr(logging, LOG_LEVEL, logging.INFO)
-
 logging.basicConfig(
-    level=log_level,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(os.path.join(script_dir, 'zuercher_discovery.log'), encoding='utf-8'),
