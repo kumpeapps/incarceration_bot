@@ -49,12 +49,11 @@ def new_session() -> Session:
             'isolation_level': 'READ_COMMITTED',  # Reduce lock contention
             'echo': False,  # Set to True for debugging SQL queries
             'connect_args': {
-                'connect_timeout': 60,     # Increased connection timeout
-                'read_timeout': 300,       # 5 minutes for large batch operations  
-                'write_timeout': 300,      # 5 minutes for large batch operations
-                'autocommit': False,       # Explicit transaction control
-                'charset': 'utf8mb4',      # Full UTF-8 support
-                'sql_mode': 'TRADITIONAL,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'
+                'connect_timeout': 10,  # Connection timeout
+                'read_timeout': 30,     # Read timeout
+                'write_timeout': 30,    # Write timeout
+                'autocommit': False,    # Explicit transaction control
+                'charset': 'utf8mb4'    # Full UTF-8 support
             }
         }
     else:
