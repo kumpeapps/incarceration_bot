@@ -16,7 +16,8 @@ from loguru import logger
 
 
 class DatabaseOptimizer:
-    """Optimized database operations to reduce binlog writes.""
+    """Optimized database operations to reduce binlog writes."""
+    
     # Only update last_seen if more than 1 hour has passed
     LAST_SEEN_UPDATE_THRESHOLD = timedelta(hours=1)
     
@@ -26,12 +27,6 @@ class DatabaseOptimizer:
         Optimized inmate upsert that only updates last_seen if significantly different.
         Reduces binlog bloat by avoiding unnecessary timestamp updates.
         """
-        # Limit mugshot size to prevent timeouts (max 1MB base64)
-        if 'mugshot' in inmate_data and inmate_data['mugshot']:
-            if len(inmate_data['mugshot']) > 1048576:  # 1MB limit
-                logger.warning(f"Mugshot too large ({len(inmate_data['mugshot'])} bytes), truncating for {inmate_data.get('name', 'unknown')}")
-                inmate_data['mugshot'] = inmate_data['mugshot'][:1048576]
-        
         engine = session.get_bind()
         if engine.dialect.name == "mysql":
             # Only update last_seen if it's been more than 1 hour since last update
@@ -104,12 +99,6 @@ class DatabaseOptimizer:
             params = {}
             
             for j, inmate_data in enumerate(batch):
-                # Limit mugshot size to prevent timeouts
-                if 'mugshot' in inmate_data and inmate_data['mugshot']:
-                    if len(inmate_data['mugshot']) > 1048576:  # 1MB limit
-                        logger.warning(f"Batch {batch_num}: Mugshot too large ({len(inmate_data['mugshot'])} bytes), truncating for {inmate_data.get('name', 'unknown')}")
-                        inmate_data['mugshot'] = inmate_data['mugshot'][:1048576]
-                
                 # Create unique parameter names for this batch item
                 param_names = {key: f"{key}_{j}" for key in inmate_data.keys()}
                 
