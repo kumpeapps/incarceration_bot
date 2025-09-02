@@ -4,11 +4,92 @@ from datetime import datetime, date
 from typing import List, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 from loguru import logger
 from models.Jail import Jail
 from models.Inmate import Inmate
 from models.Monitor import Monitor
 from helpers.insert_ignore import upsert_inmate
+
+
+def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int = 100):
+    """
+    Perform bulk upsert of inmates with batching for better performance.
+    
+    Args:
+        session (Session): SQLAlchemy session for database operations.
+        inmates (List[Inmate]): List of Inmate objects to upsert.
+        batch_size (int): Number of inmates to process in each batch.
+    """
+    engine = session.get_bind()
+    
+    if engine.dialect.name == "mysql":
+        # Use MySQL's bulk INSERT ... ON DUPLICATE KEY UPDATE
+        logger.info(f"Using MySQL bulk upsert for {len(inmates)} inmates in batches of {batch_size}")
+        
+        # Process in batches to avoid memory issues and long-running transactions
+        for i in range(0, len(inmates), batch_size):
+            batch = inmates[i:i + batch_size]
+            logger.debug(f"Processing batch {i//batch_size + 1}: inmates {i+1} to {min(i+batch_size, len(inmates))}")
+            
+            # Prepare batch data
+            batch_data = []
+            for inmate in batch:
+                data = inmate.to_dict()
+                if 'last_seen' not in data or data['last_seen'] is None:
+                    data['last_seen'] = datetime.now()
+                batch_data.append(data)
+            
+            # Create bulk upsert SQL
+            sql = text("""
+                INSERT INTO inmates (
+                    name, race, sex, cell_block, arrest_date, held_for_agency, 
+                    mugshot, dob, hold_reasons, is_juvenile, release_date, 
+                    in_custody_date, jail_id, hide_record, last_seen
+                ) VALUES (
+                    :name, :race, :sex, :cell_block, :arrest_date, :held_for_agency,
+                    :mugshot, :dob, :hold_reasons, :is_juvenile, :release_date,
+                    :in_custody_date, :jail_id, :hide_record, :last_seen
+                )
+                ON DUPLICATE KEY UPDATE
+                    last_seen = CASE 
+                        WHEN last_seen IS NULL OR last_seen < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                        THEN VALUES(last_seen)
+                        ELSE last_seen
+                    END,
+                    cell_block = VALUES(cell_block),
+                    arrest_date = VALUES(arrest_date),
+                    held_for_agency = VALUES(held_for_agency),
+                    mugshot = VALUES(mugshot),
+                    in_custody_date = VALUES(in_custody_date),
+                    release_date = VALUES(release_date),
+                    hold_reasons = VALUES(hold_reasons)
+            """)
+            
+            try:
+                # Execute the batch
+                session.execute(sql, batch_data)
+                logger.debug(f"Successfully processed batch of {len(batch_data)} inmates")
+            except Exception as error:
+                logger.error(f"Failed to process batch {i//batch_size + 1}: {error}")
+                # Fallback to individual upserts for this batch
+                logger.info(f"Falling back to individual upserts for batch {i//batch_size + 1}")
+                for inmate in batch:
+                    try:
+                        upsert_inmate(session, inmate.to_dict())
+                    except Exception as individual_error:
+                        logger.error(f"Failed to upsert inmate {inmate.name}: {individual_error}")
+                        
+        logger.info(f"Completed bulk upsert of {len(inmates)} inmates")
+        
+    else:
+        # Fallback to individual upserts for non-MySQL databases
+        logger.info(f"Using individual upserts for {len(inmates)} inmates (non-MySQL database)")
+        for inmate in inmates:
+            try:
+                upsert_inmate(session, inmate.to_dict())
+            except Exception as error:
+                logger.error(f"Failed to upsert inmate {inmate.name}: {error}")
 
 
 def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail: Jail):
@@ -127,13 +208,10 @@ def process_scrape_data_optimized(session: Session, inmates: List[Inmate], jail:
             for monitor in new_monitors:
                 session.add(monitor)
 
-        # Process inmates with bulk upsert for performance
+        # Process inmates with true bulk upsert for performance
         if inmates_to_insert:
             logger.info(f"Processing {len(inmates_to_insert)} inmates with bulk upsert")
-            for inmate in inmates_to_insert:
-                # Use upsert to handle duplicates and update last_seen
-                upsert_inmate(session, inmate.to_dict())
-                logger.debug(f"Upserted inmate: {inmate.name}")
+            bulk_upsert_inmates(session, inmates_to_insert)
 
         # Commit all changes at once
         session.commit()
