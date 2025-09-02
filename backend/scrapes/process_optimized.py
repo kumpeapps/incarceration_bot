@@ -12,7 +12,7 @@ from models.Monitor import Monitor
 from helpers.insert_ignore import upsert_inmate
 
 
-def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int = 100):
+def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int = 50):
     """
     Perform bulk upsert of inmates with batching for better performance.
     
@@ -24,13 +24,34 @@ def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int
     engine = session.get_bind()
     
     if engine.dialect.name == "mysql":
+        # Check database size for optimization decisions
+        try:
+            result = session.execute(text("SELECT COUNT(*) as count FROM inmates")).fetchone()
+            total_inmates_in_db = result.count if result else 0
+            logger.info(f"Database contains {total_inmates_in_db:,} total inmates")
+            
+            # Adjust batch size based on database size
+            if total_inmates_in_db > 1000000:  # 1M+ records
+                batch_size = 25
+                logger.info(f"Large database detected, reducing batch size to {batch_size}")
+            elif total_inmates_in_db > 500000:  # 500K+ records
+                batch_size = 40
+                logger.info(f"Medium database detected, adjusting batch size to {batch_size}")
+                
+        except Exception as db_check_error:
+            logger.warning(f"Could not check database size: {db_check_error}")
+        
         # Use MySQL's bulk INSERT ... ON DUPLICATE KEY UPDATE
         logger.info(f"Using MySQL bulk upsert for {len(inmates)} inmates in batches of {batch_size}")
         
         # Process in batches to avoid memory issues and long-running transactions
         for i in range(0, len(inmates), batch_size):
+            batch_start_time = datetime.now()
             batch = inmates[i:i + batch_size]
-            logger.debug(f"Processing batch {i//batch_size + 1}: inmates {i+1} to {min(i+batch_size, len(inmates))}")
+            batch_num = i//batch_size + 1
+            total_batches = (len(inmates) + batch_size - 1) // batch_size
+            
+            logger.info(f"Processing batch {batch_num}/{total_batches}: inmates {i+1} to {min(i+batch_size, len(inmates))}")
             
             # Prepare batch data
             batch_data = []
@@ -39,6 +60,8 @@ def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int
                 if 'last_seen' not in data or data['last_seen'] is None:
                     data['last_seen'] = datetime.now()
                 batch_data.append(data)
+            
+            logger.debug(f"Prepared {len(batch_data)} inmate records for batch {batch_num}")
             
             # Create bulk upsert SQL
             sql = text("""
@@ -67,18 +90,43 @@ def bulk_upsert_inmates(session: Session, inmates: List[Inmate], batch_size: int
             """)
             
             try:
-                # Execute the batch
+                # Execute the batch with timing
+                logger.debug(f"Executing SQL for batch {batch_num}...")
+                query_start_time = datetime.now()
                 session.execute(sql, batch_data)
-                logger.debug(f"Successfully processed batch of {len(batch_data)} inmates")
+                query_end_time = datetime.now()
+                query_duration = (query_end_time - query_start_time).total_seconds()
+                
+                batch_end_time = datetime.now()
+                batch_duration = (batch_end_time - batch_start_time).total_seconds()
+                
+                logger.info(f"Batch {batch_num}/{total_batches} completed in {batch_duration:.2f}s (SQL: {query_duration:.2f}s)")
+                
+                # If query took too long, reduce batch size for remaining batches
+                if query_duration > 30 and batch_size > 10:
+                    batch_size = max(10, batch_size // 2)
+                    logger.warning(f"Slow query detected ({query_duration:.2f}s), reducing batch size to {batch_size}")
+                    
             except Exception as error:
-                logger.error(f"Failed to process batch {i//batch_size + 1}: {error}")
+                batch_end_time = datetime.now()
+                batch_duration = (batch_end_time - batch_start_time).total_seconds()
+                logger.error(f"Failed to process batch {batch_num} after {batch_duration:.2f}s: {error}")
+                
                 # Fallback to individual upserts for this batch
-                logger.info(f"Falling back to individual upserts for batch {i//batch_size + 1}")
-                for inmate in batch:
+                logger.info(f"Falling back to individual upserts for batch {batch_num}")
+                individual_start_time = datetime.now()
+                
+                for j, inmate in enumerate(batch):
                     try:
                         upsert_inmate(session, inmate.to_dict())
+                        if (j + 1) % 10 == 0:
+                            logger.debug(f"Individual upsert progress: {j+1}/{len(batch)} inmates")
                     except Exception as individual_error:
                         logger.error(f"Failed to upsert inmate {inmate.name}: {individual_error}")
+                
+                individual_end_time = datetime.now()
+                individual_duration = (individual_end_time - individual_start_time).total_seconds()
+                logger.info(f"Individual upserts for batch {batch_num} completed in {individual_duration:.2f}s")
                         
         logger.info(f"Completed bulk upsert of {len(inmates)} inmates")
         
