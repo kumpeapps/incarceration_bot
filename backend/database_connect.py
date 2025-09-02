@@ -49,9 +49,9 @@ def new_session() -> Session:
             'isolation_level': 'READ_COMMITTED',  # Reduce lock contention
             'echo': False,  # Set to True for debugging SQL queries
             'connect_args': {
-                'connect_timeout': 60,     # Increased connection timeout
-                'read_timeout': 300,       # 5 minutes for large batch operations  
-                'write_timeout': 300,      # 5 minutes for large batch operations
+                'connect_timeout': 120,    # Increased connection timeout
+                'read_timeout': 1800,      # 30 minutes for large mugshot data operations  
+                'write_timeout': 1800,     # 30 minutes for large mugshot data operations
                 'autocommit': False,       # Explicit transaction control
                 'charset': 'utf8mb4',      # Full UTF-8 support
                 'sql_mode': 'TRADITIONAL,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'

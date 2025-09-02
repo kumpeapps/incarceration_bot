@@ -52,13 +52,13 @@ class DatabaseOptimizer:
         """Configure MySQL session-level timeouts for batch operations."""
         try:
             # Set longer timeouts for this session
-            session.execute(text("SET SESSION wait_timeout = 3600"))  # 1 hour
-            session.execute(text("SET SESSION interactive_timeout = 3600"))  # 1 hour
-            session.execute(text("SET SESSION net_read_timeout = 300"))  # 5 minutes
-            session.execute(text("SET SESSION net_write_timeout = 300"))  # 5 minutes
-            session.execute(text("SET SESSION innodb_lock_wait_timeout = 120"))  # 2 minutes for lock waits
+            session.execute(text("SET SESSION wait_timeout = 7200"))  # 2 hours
+            session.execute(text("SET SESSION interactive_timeout = 7200"))  # 2 hours
+            session.execute(text("SET SESSION net_read_timeout = 1800"))  # 30 minutes for large mugshot data
+            session.execute(text("SET SESSION net_write_timeout = 1800"))  # 30 minutes for large mugshot data
+            session.execute(text("SET SESSION innodb_lock_wait_timeout = 300"))  # 5 minutes for lock waits
             session.execute(text("SET SESSION transaction_isolation = 'READ-COMMITTED'"))  # Reduce lock contention
-            logger.debug("Configured session timeouts for batch processing")
+            logger.debug("Configured extended session timeouts for large data batch processing")
         except Exception as e:
             logger.warning(f"Could not configure session timeouts: {e}")
             # Not critical, continue without timeout changes
@@ -72,6 +72,12 @@ class DatabaseOptimizer:
         Optimized inmate upsert that only updates last_seen if significantly different.
         Reduces binlog bloat by avoiding unnecessary timestamp updates.
         """
+        # Limit mugshot size to prevent timeouts (max 1MB base64)
+        if 'mugshot' in inmate_data and inmate_data['mugshot']:
+            if len(inmate_data['mugshot']) > 1048576:  # 1MB limit
+                logger.warning(f"Mugshot too large ({len(inmate_data['mugshot'])} bytes), truncating for {inmate_data.get('name', 'unknown')}")
+                inmate_data['mugshot'] = inmate_data['mugshot'][:1048576]
+        
         engine = session.get_bind()
         if engine.dialect.name == "mysql":
             # Only update last_seen if it's been more than 1 hour since last update
@@ -116,14 +122,14 @@ class DatabaseOptimizer:
             session.commit()
     
     @staticmethod
-    def batch_upsert_inmates(session: Session, inmates_data: list[dict], batch_size: int = 50):
+    def batch_upsert_inmates(session: Session, inmates_data: list[dict], batch_size: int = 20):
         """
         Batch upsert inmates to reduce the number of database round trips.
         
         Args:
             session: SQLAlchemy session
             inmates_data: List of inmate dictionaries
-            batch_size: Number of records to process in each batch (reduced default for stability)
+            batch_size: Number of records to process in each batch (reduced for large mugshot data)
         """
         engine = session.get_bind()
         if engine.dialect.name != "mysql":
@@ -160,6 +166,12 @@ class DatabaseOptimizer:
             params = {}
             
             for j, inmate_data in enumerate(batch):
+                # Limit mugshot size to prevent timeouts
+                if 'mugshot' in inmate_data and inmate_data['mugshot']:
+                    if len(inmate_data['mugshot']) > 1048576:  # 1MB limit
+                        logger.warning(f"Batch {batch_num}: Mugshot too large ({len(inmate_data['mugshot'])} bytes), truncating for {inmate_data.get('name', 'unknown')}")
+                        inmate_data['mugshot'] = inmate_data['mugshot'][:1048576]
+                
                 # Create unique parameter names for this batch item
                 param_names = {key: f"{key}_{j}" for key in inmate_data.keys()}
                 
