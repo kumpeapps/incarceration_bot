@@ -79,9 +79,36 @@ def upgrade() -> None:
     print("🚀 Starting inmates table partitioning by jail_id...")
     
     try:
+        # Enhanced check - verify table exists first
+        if not table_exists(connection, 'inmates'):
+            print("❌ inmates table does not exist - cannot partition")
+            print("   This migration requires the inmates table to exist")
+            return
+        
         # Check if table is already partitioned
         if is_table_partitioned(connection, 'inmates'):
             print("✅ Table 'inmates' is already partitioned, no changes needed")
+            
+            # Show current partition info
+            try:
+                partition_info = connection.execute(text("""
+                    SELECT PARTITION_NAME, TABLE_ROWS 
+                    FROM information_schema.PARTITIONS 
+                    WHERE TABLE_NAME = 'inmates' 
+                    AND TABLE_SCHEMA = DATABASE()
+                    AND PARTITION_NAME IS NOT NULL
+                    ORDER BY PARTITION_NAME
+                """)).fetchall()
+                
+                print(f"   Current partitions ({len(partition_info)}):")
+                for partition_name, row_count in partition_info[:5]:  # Show first 5
+                    print(f"     {partition_name}: {row_count:,} rows")
+                if len(partition_info) > 5:
+                    print(f"     ... and {len(partition_info) - 5} more partitions")
+                    
+            except Exception as info_error:
+                print(f"   Could not retrieve partition info: {info_error}")
+            
             return
         
         # Get current row count for verification

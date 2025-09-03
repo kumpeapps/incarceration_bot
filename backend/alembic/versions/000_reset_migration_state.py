@@ -43,16 +43,31 @@ def upgrade() -> None:
         
         if result.scalar() > 0:
             # Show current state
-            current_versions = connection.execute(text("SELECT version_num FROM alembic_version")).fetchall()
-            print(f"📋 Current version entries: {[v[0] for v in current_versions]}")
+            try:
+                current_versions = connection.execute(text("SELECT version_num FROM alembic_version")).fetchall()
+                current_version_list = [v[0] for v in current_versions]
+                print(f"📋 Current version entries: {current_version_list}")
+                
+                # Check if we're already at a good state
+                if len(current_version_list) == 1 and current_version_list[0] in ['ae704cc1468a', '9112011517ea']:
+                    print(f"✅ Already at stable revision: {current_version_list[0]}")
+                    print("   No reset needed")
+                    return
+                    
+            except Exception as check_error:
+                print(f"⚠️  Could not check current state: {check_error}")
             
             # Clear any problematic version entries
             print("📋 Clearing problematic migration entries...")
             problematic_revisions = ['36814ca63b22', '2627f3ecc28f']
             
             for revision in problematic_revisions:
-                connection.execute(text("DELETE FROM alembic_version WHERE version_num = :rev"), {"rev": revision})
-                print(f"   Removed problematic revision: {revision}")
+                try:
+                    result = connection.execute(text("DELETE FROM alembic_version WHERE version_num = :rev"), {"rev": revision})
+                    if result.rowcount > 0:
+                        print(f"   Removed problematic revision: {revision}")
+                except Exception as delete_error:
+                    print(f"   Could not remove {revision}: {delete_error}")
             
             # Clear all and set to a stable revision
             connection.execute(text("DELETE FROM alembic_version"))
@@ -66,6 +81,7 @@ def upgrade() -> None:
             print("   Ready to apply today's optimizations cleanly")
         else:
             print("⚠️  No alembic_version table found - will be created on first migration")
+            print("   This appears to be a fresh database")
             
     except Exception as e:
         print(f"⚠️  Migration state reset encountered issue: {e}")

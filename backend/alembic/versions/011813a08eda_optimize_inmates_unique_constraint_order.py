@@ -33,6 +33,28 @@ def upgrade() -> None:
     """Upgrade schema by optimizing the inmates unique constraint order."""
     print("🔧 Optimizing inmates unique constraint for better performance...")
     
+    # First check if the optimized constraint already exists
+    from sqlalchemy import text
+    connection = op.get_bind()
+    
+    try:
+        # Check if optimized constraint already exists
+        result = connection.execute(text("""
+            SELECT COUNT(*) as cnt FROM information_schema.TABLE_CONSTRAINTS 
+            WHERE TABLE_NAME = 'inmates'
+            AND CONSTRAINT_NAME = 'unique_inmate_optimized'
+            AND TABLE_SCHEMA = DATABASE()
+        """))
+        
+        if result.scalar() > 0:
+            print("✅ Optimized constraint 'unique_inmate_optimized' already exists")
+            print("   No changes needed - constraint optimization already applied")
+            return
+            
+    except Exception as e:
+        print(f"⚠️  Could not check existing constraints: {e}")
+        print("   Continuing with migration...")
+    
     # Drop the old constraint if it exists
     old_dropped = safe_drop_constraint('inmates', 'unique_inmate_new', 'unique')
     

@@ -26,6 +26,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Blank upgrade - no changes needed."""
     print("ℹ️  Blank migration 36814ca63b22 - no schema changes")
+    print("   This migration exists only to satisfy dependency references")
     pass
 
 
