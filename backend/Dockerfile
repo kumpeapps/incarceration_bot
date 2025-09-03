@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     make \
+    nano \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
