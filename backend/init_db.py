@@ -458,20 +458,55 @@ def initialize_database():
         logger.info("Initializing database schema...")
         
         session = new_session()
-        # Create all tables using SQLAlchemy metadata
-        logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
-        Base.metadata.create_all(session.bind)
+        
+        # Use clean schema approach instead of Base.metadata.create_all()
+        # This handles partitioning and optimizations properly
+        try:
+            from create_clean_schema import create_complete_schema, initialize_groups
+            logger.info("Using clean schema approach for database initialization...")
+            
+            # Create complete optimized schema with partitioning
+            create_complete_schema(session)
+            
+            # Set up default groups
+            initialize_groups(session)
+            
+            session.commit()
+            logger.info("✅ Clean schema initialization completed successfully")
+            
+        except ImportError:
+            # Fallback to traditional approach if clean schema not available
+            logger.warning("Clean schema not available, falling back to traditional table creation")
+            logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
+            Base.metadata.create_all(session.bind)
+            
+        except Exception as schema_error:
+            logger.error(f"Clean schema initialization failed: {schema_error}")
+            logger.info("Falling back to traditional table creation...")
+            logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
+            Base.metadata.create_all(session.bind)
+            
         session.close()
         logger.info("Database schema initialization completed")
         
-        # Run Alembic migrations
-        if not run_alembic_migrations():
-            logger.warning("Alembic migrations failed, but continuing with startup")
+        # Run Alembic migrations (only if not using clean schema)
+        # Skip migrations when using clean schema to avoid conflicts
+        try:
+            from create_clean_schema import create_complete_schema
+            logger.info("Clean schema detected - skipping Alembic migrations to avoid conflicts")
+        except ImportError:
+            logger.info("Running Alembic migrations...")
+            if not run_alembic_migrations():
+                logger.warning("Alembic migrations failed, but continuing with startup")
         
-        # Ensure required groups exist
-        logger.info("About to initialize groups...")
-        initialize_groups()
-        logger.info("Group initialization completed")
+        # Ensure required groups exist (only if not already done by clean schema)
+        try:
+            from create_clean_schema import initialize_groups
+            logger.info("Groups already initialized by clean schema")
+        except ImportError:
+            logger.info("About to initialize groups...")
+            initialize_groups()
+            logger.info("Group initialization completed")
         
         logger.info("Database initialization completed successfully")
         return True

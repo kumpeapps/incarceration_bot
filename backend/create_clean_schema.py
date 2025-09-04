@@ -19,12 +19,14 @@ logger = logging.getLogger(__name__)
 
 def create_clean_schema():
     """Create complete database schema from scratch."""
-    from database_connect import get_engine, new_session
-    from sqlalchemy import text, inspect
+    from database_connect import get_database_uri, new_session
+    from sqlalchemy import text, inspect, create_engine
     
     logger.info("🗄️  Creating clean database schema...")
     
-    engine = get_engine()
+    # Create engine and session
+    database_uri = get_database_uri()
+    engine = create_engine(database_uri)
     session = new_session()
     
     try:
@@ -40,15 +42,8 @@ def create_clean_schema():
         # Create all tables with complete schema
         create_complete_schema(session)
         
-        # Create performance indexes
-        create_indexes(session)
-        
-        # Apply table partitioning for performance
-        apply_table_partitioning(session)
-        
-        # Initialize required data
+        # Set up default groups
         initialize_groups(session)
-        initialize_alembic_version(session)
         
         session.commit()
         logger.info("✅ Clean schema creation completed successfully")
@@ -65,7 +60,7 @@ def create_partitioned_inmates_table(session):
     """Create the inmates table with partitioning for MySQL."""
     from sqlalchemy import text
     
-    logger.info("Creating partitioned inmates table for MySQL...")
+    logger.info("🔧 Creating partitioned inmates table for MySQL...")
     
     # First check if table exists
     check_table_sql = """
@@ -94,9 +89,12 @@ def create_partitioned_inmates_table(session):
             logger.info("ℹ️  Inmates table already exists and is partitioned")
             return
         else:
-            logger.info("Converting existing inmates table to partitioned...")
+            logger.info("⚠️  Inmates table exists but is NOT partitioned - recreating with partitions...")
             # Drop and recreate with partitioning
             session.execute(text("DROP TABLE inmates"))
+            logger.info("🗑️  Dropped existing non-partitioned inmates table")
+    
+    logger.info("🏗️  Creating new partitioned inmates table...")
     
     # Create partitioned inmates table
     inmates_partitioned_sql = """
@@ -131,6 +129,7 @@ def create_partitioned_inmates_table(session):
     """
     
     try:
+        logger.info("📋 Executing CREATE TABLE with partitioning...")
         session.execute(text(inmates_partitioned_sql))
         logger.info("✅ Partitioned inmates table created successfully")
         
@@ -144,10 +143,36 @@ def create_partitioned_inmates_table(session):
         """
         
         verify_result = session.execute(text(verify_sql)).fetchone()
-        logger.info(f"✅ Verified: inmates table has {verify_result.partition_count} partitions")
+        partition_count = verify_result.partition_count
+        logger.info(f"🎯 Verified: inmates table has {partition_count} partitions")
+        
+        if partition_count == 16:
+            logger.info("🎉 SUCCESS: Inmates table properly partitioned with 16 hash partitions!")
+            
+            # List all partitions for confirmation
+            list_partitions_sql = """
+            SELECT 
+                partition_name,
+                partition_ordinal_position,
+                table_rows
+            FROM information_schema.partitions 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'inmates' 
+            AND partition_name IS NOT NULL
+            ORDER BY partition_ordinal_position
+            """
+            
+            partitions = session.execute(text(list_partitions_sql)).fetchall()
+            logger.info("📊 Partition details:")
+            for partition in partitions:
+                logger.info(f"   - {partition.partition_name}: position {partition.partition_ordinal_position}, rows: {partition.table_rows}")
+                
+        else:
+            logger.error(f"❌ PARTITIONING FAILED: Expected 16 partitions, got {partition_count}")
         
     except Exception as e:
         logger.error(f"❌ Failed to create partitioned inmates table: {e}")
+        logger.error(f"SQL attempted: {inmates_partitioned_sql[:200]}...")
         raise
 
 
@@ -155,17 +180,17 @@ def create_complete_schema(session):
     """Create all tables with the complete, final schema."""
     from sqlalchemy import text
     
-    logger.info("Creating complete database schema...")
+    logger.info("🚀 Creating complete database schema...")
     
     # Get database dialect for SQL variations
     dialect = session.bind.dialect.name
-    logger.info(f"Database dialect: {dialect}")
+    logger.info(f"🔍 Database dialect detected: {dialect}")
     
     # Define SQL for each table based on our models
     schema_sql = get_schema_sql(dialect)
     
     for table_name, sql in schema_sql.items():
-        logger.info(f"Creating table: {table_name}")
+        logger.info(f"📋 Creating table: {table_name}")
         try:
             session.execute(text(sql))
             logger.info(f"✅ Table {table_name} created successfully")
@@ -178,7 +203,45 @@ def create_complete_schema(session):
     
     # Handle partitioned tables separately (MySQL only)
     if dialect == 'mysql':
+        logger.info("🗂️  MySQL detected - setting up table partitioning...")
         create_partitioned_inmates_table(session)
+    else:
+        logger.info(f"ℹ️  Database dialect '{dialect}' does not support partitioning - creating regular inmates table")
+        # For non-MySQL databases, create inmates table normally
+        inmates_sql = f'''
+            CREATE TABLE IF NOT EXISTS inmates (
+                idinmates INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                race VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+                sex VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+                cell_block VARCHAR(255) NULL,
+                arrest_date DATE NULL,
+                held_for_agency VARCHAR(255) NULL,
+                mugshot TEXT NULL,
+                dob VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+                hold_reasons VARCHAR(1000) NOT NULL DEFAULT '',
+                is_juvenile INTEGER NOT NULL DEFAULT 0,
+                release_date VARCHAR(255) NOT NULL DEFAULT '',
+                in_custody_date DATE NOT NULL,
+                last_seen DATETIME NULL,
+                jail_id VARCHAR(255) NOT NULL,
+                hide_record INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (jail_id) REFERENCES jails(jail_id),
+                UNIQUE (jail_id, arrest_date, name, dob, sex, race)
+            )
+        '''
+        
+        try:
+            session.execute(text(inmates_sql))
+            logger.info("✅ Standard inmates table created for non-MySQL database")
+        except Exception as e:
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                logger.info("ℹ️  Inmates table already exists")
+            else:
+                logger.error(f"❌ Failed to create inmates table: {e}")
+                raise
+    
+    logger.info("🎉 Complete schema creation finished!")
 
 def get_schema_sql(dialect):
     """Get complete schema SQL for all tables."""
