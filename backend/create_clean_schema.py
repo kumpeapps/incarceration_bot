@@ -189,19 +189,28 @@ def create_complete_schema(session):
     # Define SQL for each table based on our models
     schema_sql = get_schema_sql(dialect)
     
-    for table_name, sql in schema_sql.items():
-        logger.info(f"📋 Creating table: {table_name}")
-        try:
-            session.execute(text(sql))
-            logger.info(f"✅ Table {table_name} created successfully")
-        except Exception as e:
-            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
-                logger.info(f"ℹ️  Table {table_name} already exists, skipping")
-            else:
-                logger.error(f"❌ Failed to create table {table_name}: {e}")
-                raise
+    # Create tables in dependency order:
+    # 1. First create tables that don't depend on inmates
+    # 2. Then create inmates table (with partitioning if MySQL)
+    # 3. Finally create tables that depend on inmates
     
-    # Handle partitioned tables separately (MySQL only)
+    # Phase 1: Independent tables (no foreign keys to inmates)
+    independent_tables = ['users', 'groups', 'user_groups', 'jails', 'monitors', 'monitor_links', 'sessions']
+    
+    for table_name in independent_tables:
+        if table_name in schema_sql:
+            logger.info(f"📋 Creating table: {table_name}")
+            try:
+                session.execute(text(schema_sql[table_name]))
+                logger.info(f"✅ Table {table_name} created successfully")
+            except Exception as e:
+                if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                    logger.info(f"ℹ️  Table {table_name} already exists, skipping")
+                else:
+                    logger.error(f"❌ Failed to create table {table_name}: {e}")
+                    raise
+    
+    # Phase 2: Create inmates table (with partitioning if MySQL)
     if dialect == 'mysql':
         logger.info("🗂️  MySQL detected - setting up table partitioning...")
         create_partitioned_inmates_table(session)
@@ -240,6 +249,22 @@ def create_complete_schema(session):
             else:
                 logger.error(f"❌ Failed to create inmates table: {e}")
                 raise
+    
+    # Phase 3: Create tables that depend on inmates
+    dependent_tables = ['monitor_inmate_links']
+    
+    for table_name in dependent_tables:
+        if table_name in schema_sql:
+            logger.info(f"📋 Creating table: {table_name}")
+            try:
+                session.execute(text(schema_sql[table_name]))
+                logger.info(f"✅ Table {table_name} created successfully")
+            except Exception as e:
+                if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                    logger.info(f"ℹ️  Table {table_name} already exists, skipping")
+                else:
+                    logger.error(f"❌ Failed to create table {table_name}: {e}")
+                    raise
     
     logger.info("🎉 Complete schema creation finished!")
 
