@@ -239,3 +239,6 @@ docker-compose.*yml
 private_*.*
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,linux,python,venv,dotenv
+# Migration files - managed by clean schema
+backend/alembic/versions/*.py
+!backend/alembic/versions/.gitkeep

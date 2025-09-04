@@ -38,17 +38,23 @@ echo ""
 echo "📋 Step 2: Remove conflicting migration files"
 echo "Cleaning up problematic migration files..."
 
-# Remove all existing migration files except the clean schema
+# Create backup of migration files first
 docker compose exec backend_api bash -c "
 cd /app/alembic/versions
 echo 'Current migration files:'
 ls -la *.py | wc -l
-echo 'Removing problematic migrations...'
-rm -f *emergency*.py
-rm -f *auto_merge*.py
-rm -f *conflicting*.py
+
+# Create backup directory for old migrations
+mkdir -p /tmp/old_migrations_backup
+echo 'Backing up existing migrations to /tmp/old_migrations_backup...'
+cp *.py /tmp/old_migrations_backup/ 2>/dev/null || true
+
+echo 'Removing ALL existing migration files to prevent conflicts...'
+rm -f *.py
+
 echo 'Migration files after cleanup:'
-ls -la *.py | wc -l
+ls -la *.py 2>/dev/null | wc -l || echo '0'
+echo 'All migration files removed - clean slate ready'
 "
 
 echo ""
