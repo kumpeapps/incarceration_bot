@@ -43,6 +43,9 @@ def create_clean_schema():
         # Create performance indexes
         create_indexes(session)
         
+        # Apply table partitioning for performance
+        apply_table_partitioning(session)
+        
         # Initialize required data
         initialize_groups(session)
         initialize_alembic_version(session)
@@ -189,8 +192,7 @@ def get_schema_sql(dialect):
                 hide_record {boolean_type} NOT NULL DEFAULT 0,
                 FOREIGN KEY (jail_id) REFERENCES jails(jail_id),
                 UNIQUE KEY unique_inmate_optimized (jail_id, arrest_date, name, dob, sex, race)
-            )
-        ''',
+            )''' + (f''' PARTITION BY HASH(CRC32(jail_id)) PARTITIONS 16''' if dialect == 'mysql' else ''),
         
         'monitors': f'''
             CREATE TABLE IF NOT EXISTS monitors (
@@ -292,6 +294,61 @@ def create_indexes(session):
                 logger.info(f"ℹ️  Index already exists, skipping")
             else:
                 logger.warning(f"⚠️  Could not create index: {e}")
+
+def apply_table_partitioning(session):
+    """Apply table partitioning for performance optimization."""
+    from sqlalchemy import text
+    logger.info("Applying table partitioning for performance...")
+    
+    # Get database dialect
+    dialect = session.bind.dialect.name
+    
+    if dialect != 'mysql':
+        logger.info("ℹ️  Table partitioning only supported for MySQL, skipping")
+        return
+    
+    try:
+        # Check if inmates table is already partitioned
+        result = session.execute(text("""
+            SELECT COUNT(*) FROM information_schema.PARTITIONS 
+            WHERE TABLE_NAME = 'inmates' 
+            AND TABLE_SCHEMA = DATABASE()
+            AND PARTITION_NAME IS NOT NULL
+        """))
+        
+        partition_count = result.scalar()
+        
+        if partition_count > 0:
+            logger.info(f"✅ Inmates table already partitioned ({partition_count} partitions)")
+            return
+        
+        logger.info("🔧 Applying hash partitioning to inmates table by jail_id...")
+        
+        # Apply partitioning to existing table
+        # Note: This requires a table rebuild, so we need to be careful with large datasets
+        session.execute(text("""
+            ALTER TABLE inmates PARTITION BY HASH(CRC32(jail_id)) PARTITIONS 16
+        """))
+        
+        logger.info("✅ Successfully applied hash partitioning (16 partitions) to inmates table")
+        
+        # Verify partitioning was applied
+        result = session.execute(text("""
+            SELECT COUNT(*) FROM information_schema.PARTITIONS 
+            WHERE TABLE_NAME = 'inmates' 
+            AND TABLE_SCHEMA = DATABASE()
+            AND PARTITION_NAME IS NOT NULL
+        """))
+        
+        new_partition_count = result.scalar()
+        logger.info(f"✅ Verified: inmates table now has {new_partition_count} partitions")
+        
+    except Exception as e:
+        if 'already partitioned' in str(e).lower():
+            logger.info("ℹ️  Inmates table already partitioned, skipping")
+        else:
+            logger.warning(f"⚠️  Could not apply table partitioning: {e}")
+            logger.info("ℹ️  Continuing without partitioning - table will still function normally")
 
 def initialize_groups(session):
     """Initialize all required groups."""
