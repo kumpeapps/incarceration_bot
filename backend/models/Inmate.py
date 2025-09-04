@@ -64,9 +64,8 @@ class Inmate(Base):  # type: ignore
     release_date = Column(String(255), nullable=False, default="")
     in_custody_date = Column(Date, nullable=False, default=date.today())
     last_seen = Column(DateTime, nullable=True)
-    jail_id = Column(String(255), ForeignKey("jails.jail_id"), nullable=False)
+    jail_id = Column(String(255), nullable=False)  # No FK constraint for partitioning compatibility
     hide_record = Column(Boolean, nullable=False, default=False)
-    jail = relationship("Jail", back_populates="inmates")
 
     def __str__(self) -> str:
         return str(self.name)

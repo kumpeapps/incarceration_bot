@@ -47,8 +47,6 @@ class Jail(Base):  # type: ignore
     last_scrape_date = Column(Date, nullable=True)
     last_successful_scrape = Column(TIMESTAMP, nullable=True, default=None)
 
-    inmates = relationship("Inmate", back_populates="jail")
-
     def to_dict(self) -> dict:
         """Converts the object to a dictionary"""
         return {

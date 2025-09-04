@@ -428,7 +428,6 @@ def get_schema_sql(dialect):
                 created_at {datetime_type} NOT NULL DEFAULT {timestamp_default},
                 updated_at {datetime_type} NOT NULL DEFAULT {timestamp_default} {timestamp_update},
                 FOREIGN KEY (monitor_id) REFERENCES monitors(idmonitors),
-                FOREIGN KEY (inmate_id) REFERENCES inmates(idinmates),
                 FOREIGN KEY (linked_by_user_id) REFERENCES users(id),
                 UNIQUE KEY unique_monitor_inmate_link (monitor_id, inmate_id)
             )
