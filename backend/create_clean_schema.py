@@ -121,10 +121,9 @@ def create_partitioned_inmates_table(session):
         KEY idx_last_seen (last_seen),
         KEY idx_jail_last_seen (jail_id, last_seen),
         KEY idx_arrest_date (arrest_date),
-        KEY idx_name (name),
-        CONSTRAINT fk_inmates_jail FOREIGN KEY (jail_id) REFERENCES jails (jail_id) ON DELETE CASCADE
+        KEY idx_name (name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    PARTITION BY HASH(CRC32(jail_id))
+    PARTITION BY KEY(jail_id)
     PARTITIONS 16
     """
     
@@ -173,7 +172,51 @@ def create_partitioned_inmates_table(session):
     except Exception as e:
         logger.error(f"❌ Failed to create partitioned inmates table: {e}")
         logger.error(f"SQL attempted: {inmates_partitioned_sql[:200]}...")
-        raise
+        
+        # Check if it's a partitioning-related error
+        error_msg = str(e).lower()
+        if any(phrase in error_msg for phrase in ['partition', 'not allowed', '1564']):
+            logger.warning("🔄 Partitioning not supported by this MySQL configuration - creating regular table...")
+            
+            # Fallback to regular inmates table without partitioning
+            inmates_regular_sql = """
+            CREATE TABLE IF NOT EXISTS inmates (
+                idinmates INT NOT NULL AUTO_INCREMENT,
+                name VARCHAR(255) NOT NULL,
+                race VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+                sex VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+                cell_block VARCHAR(255) NULL,
+                arrest_date DATE NULL,
+                held_for_agency VARCHAR(255) NULL,
+                mugshot TEXT NULL,
+                dob VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+                hold_reasons VARCHAR(1000) NOT NULL DEFAULT '',
+                is_juvenile BOOLEAN NOT NULL DEFAULT 0,
+                release_date VARCHAR(255) NOT NULL DEFAULT '',
+                in_custody_date DATE NOT NULL,
+                last_seen DATETIME NULL,
+                jail_id VARCHAR(255) NOT NULL,
+                hide_record BOOLEAN NOT NULL DEFAULT 0,
+                PRIMARY KEY (idinmates),
+                UNIQUE KEY unique_inmate_optimized (jail_id, arrest_date, name, dob, sex, race),
+                KEY idx_jail_id (jail_id),
+                KEY idx_last_seen (last_seen),
+                KEY idx_jail_last_seen (jail_id, last_seen),
+                KEY idx_arrest_date (arrest_date),
+                KEY idx_name (name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+            
+            try:
+                session.execute(text(inmates_regular_sql))
+                logger.info("✅ Regular inmates table created successfully (without partitioning)")
+                logger.info("ℹ️  Performance will still be good due to optimized indexes")
+            except Exception as fallback_error:
+                logger.error(f"❌ Even fallback table creation failed: {fallback_error}")
+                raise
+        else:
+            # Re-raise non-partitioning errors
+            raise
 
 
 def create_complete_schema(session):
