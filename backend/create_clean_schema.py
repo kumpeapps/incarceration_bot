@@ -61,6 +61,96 @@ def create_clean_schema():
     finally:
         session.close()
 
+def create_partitioned_inmates_table(session):
+    """Create the inmates table with partitioning for MySQL."""
+    from sqlalchemy import text
+    
+    logger.info("Creating partitioned inmates table for MySQL...")
+    
+    # First check if table exists
+    check_table_sql = """
+    SELECT COUNT(*) as count 
+    FROM information_schema.tables 
+    WHERE table_schema = DATABASE() AND table_name = 'inmates'
+    """
+    
+    result = session.execute(text(check_table_sql)).fetchone()
+    table_exists = result.count > 0
+    
+    if table_exists:
+        # Check if it's already partitioned
+        check_partition_sql = """
+        SELECT COUNT(*) as count 
+        FROM information_schema.partitions 
+        WHERE table_schema = DATABASE() 
+        AND table_name = 'inmates' 
+        AND partition_name IS NOT NULL
+        """
+        
+        partition_result = session.execute(text(check_partition_sql)).fetchone()
+        is_partitioned = partition_result.count > 0
+        
+        if is_partitioned:
+            logger.info("ℹ️  Inmates table already exists and is partitioned")
+            return
+        else:
+            logger.info("Converting existing inmates table to partitioned...")
+            # Drop and recreate with partitioning
+            session.execute(text("DROP TABLE inmates"))
+    
+    # Create partitioned inmates table
+    inmates_partitioned_sql = """
+    CREATE TABLE inmates (
+        idinmates INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        race VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+        sex VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+        cell_block VARCHAR(255) NULL,
+        arrest_date DATE NULL,
+        held_for_agency VARCHAR(255) NULL,
+        mugshot TEXT NULL,
+        dob VARCHAR(255) NOT NULL DEFAULT 'Unknown',
+        hold_reasons VARCHAR(1000) NOT NULL DEFAULT '',
+        is_juvenile BOOLEAN NOT NULL DEFAULT 0,
+        release_date VARCHAR(255) NOT NULL DEFAULT '',
+        in_custody_date DATE NOT NULL,
+        last_seen DATETIME NULL,
+        jail_id VARCHAR(255) NOT NULL,
+        hide_record BOOLEAN NOT NULL DEFAULT 0,
+        PRIMARY KEY (idinmates, jail_id),
+        UNIQUE KEY unique_inmate_optimized (jail_id, arrest_date, name, dob, sex, race),
+        KEY idx_jail_id (jail_id),
+        KEY idx_last_seen (last_seen),
+        KEY idx_jail_last_seen (jail_id, last_seen),
+        KEY idx_arrest_date (arrest_date),
+        KEY idx_name (name),
+        CONSTRAINT fk_inmates_jail FOREIGN KEY (jail_id) REFERENCES jails (jail_id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    PARTITION BY HASH(CRC32(jail_id))
+    PARTITIONS 16
+    """
+    
+    try:
+        session.execute(text(inmates_partitioned_sql))
+        logger.info("✅ Partitioned inmates table created successfully")
+        
+        # Verify partitioning
+        verify_sql = """
+        SELECT COUNT(*) as partition_count 
+        FROM information_schema.partitions 
+        WHERE table_schema = DATABASE() 
+        AND table_name = 'inmates' 
+        AND partition_name IS NOT NULL
+        """
+        
+        verify_result = session.execute(text(verify_sql)).fetchone()
+        logger.info(f"✅ Verified: inmates table has {verify_result.partition_count} partitions")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to create partitioned inmates table: {e}")
+        raise
+
+
 def create_complete_schema(session):
     """Create all tables with the complete, final schema."""
     from sqlalchemy import text
@@ -85,6 +175,10 @@ def create_complete_schema(session):
             else:
                 logger.error(f"❌ Failed to create table {table_name}: {e}")
                 raise
+    
+    # Handle partitioned tables separately (MySQL only)
+    if dialect == 'mysql':
+        create_partitioned_inmates_table(session)
 
 def get_schema_sql(dialect):
     """Get complete schema SQL for all tables."""
@@ -159,40 +253,22 @@ def get_schema_sql(dialect):
         
         'jails': f'''
             CREATE TABLE IF NOT EXISTS jails (
-                jail_id VARCHAR(255) PRIMARY KEY NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                address VARCHAR(500) NULL,
-                city VARCHAR(255) NULL,
-                state VARCHAR(255) NULL,
-                zip_code VARCHAR(20) NULL,
-                phone VARCHAR(20) NULL,
-                website VARCHAR(500) NULL,
-                jail_tracker_url VARCHAR(500) NULL,
-                last_updated {datetime_type} NULL
+                idjails INTEGER PRIMARY KEY {auto_increment} NOT NULL,
+                jail_name VARCHAR(255) NOT NULL,
+                state VARCHAR(2) NOT NULL,
+                jail_id VARCHAR(255) NOT NULL,
+                scrape_system VARCHAR(255) NOT NULL,
+                active {boolean_type} NOT NULL DEFAULT 0,
+                created_date DATE NOT NULL,
+                updated_date DATE NOT NULL,
+                last_scrape_date DATE NULL,
+                last_successful_scrape {datetime_type} NULL,
+                UNIQUE KEY unique_jail_name (jail_name),
+                UNIQUE KEY unique_jail_id (jail_id)
             )
         ''',
         
-        'inmates': f'''
-            CREATE TABLE IF NOT EXISTS inmates (
-                idinmates INTEGER PRIMARY KEY {auto_increment} NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                race VARCHAR(255) NOT NULL DEFAULT 'Unknown',
-                sex VARCHAR(255) NOT NULL DEFAULT 'Unknown',
-                cell_block VARCHAR(255) NULL,
-                arrest_date DATE NULL,
-                held_for_agency VARCHAR(255) NULL,
-                mugshot {text_type} NULL,
-                dob VARCHAR(255) NOT NULL DEFAULT 'Unknown',
-                hold_reasons VARCHAR(1000) NOT NULL DEFAULT '',
-                is_juvenile {boolean_type} NOT NULL DEFAULT 0,
-                release_date VARCHAR(255) NOT NULL DEFAULT '',
-                in_custody_date DATE NOT NULL,
-                last_seen {datetime_type} NULL,
-                jail_id VARCHAR(255) NOT NULL,
-                hide_record {boolean_type} NOT NULL DEFAULT 0,
-                FOREIGN KEY (jail_id) REFERENCES jails(jail_id),
-                UNIQUE KEY unique_inmate_optimized (jail_id, arrest_date, name, dob, sex, race)
-            )''' + (f''' PARTITION BY HASH(CRC32(jail_id)) PARTITIONS 16''' if dialect == 'mysql' else ''),
+        # inmates table handled separately for partitioning
         
         'monitors': f'''
             CREATE TABLE IF NOT EXISTS monitors (
