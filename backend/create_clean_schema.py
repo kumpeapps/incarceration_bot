@@ -405,15 +405,19 @@ def get_schema_sql(dialect):
             CREATE TABLE IF NOT EXISTS monitors (
                 idmonitors INTEGER PRIMARY KEY {auto_increment} NOT NULL,
                 name VARCHAR(255) NOT NULL,
-                race VARCHAR(255) NULL,
-                sex VARCHAR(255) NULL,
-                dob VARCHAR(255) NULL,
-                last_seen_incarcerated {datetime_type} NULL,
-                last_check {datetime_type} NULL,
-                release_date VARCHAR(255) NULL,
-                jail VARCHAR(255) NULL,
                 user_id INTEGER NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                arrest_date DATE NULL,
+                release_date VARCHAR(255) NULL,
+                arrest_reason VARCHAR(255) NULL,
+                arresting_agency VARCHAR(255) NULL,
+                jail VARCHAR(255) NULL,
+                mugshot TEXT NULL,
+                enable_notifications INTEGER NOT NULL DEFAULT 1,
+                notify_method VARCHAR(255) NULL DEFAULT 'pushover',
+                notify_address VARCHAR(255) NOT NULL DEFAULT '',
+                last_seen_incarcerated {datetime_type} NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                UNIQUE KEY unique_monitor (name, notify_address)
             )
         ''',
         
