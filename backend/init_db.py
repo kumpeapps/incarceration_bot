@@ -224,6 +224,10 @@ def run_alembic_migrations():
             logger.error("Critical schema updates failed")
             return False
             
+        # Ensure monitors table schema is up to date
+        if not ensure_monitors_schema():
+            logger.warning("Monitors schema update failed, but continuing...")
+            
         from alembic.config import Config
         from alembic import command
         
@@ -356,6 +360,98 @@ def run_manual_migration_fallback():
         logger.error(f"Manual migration failed: {e}")
         # Don't raise - continue with startup even if migration fails
         logger.info("Continuing with startup despite migration failure")
+        return False
+    finally:
+        session.close()
+
+def ensure_monitors_schema():
+    """Ensure monitors table has all required columns from SQLAlchemy model."""
+    logger.info("Ensuring monitors table schema is up to date...")
+    
+    from database_connect import new_session
+    from sqlalchemy import text, inspect
+    from sqlalchemy.exc import OperationalError
+    
+    session = new_session()
+    try:
+        inspector = inspect(session.bind)
+        
+        # Check if monitors table exists
+        tables = inspector.get_table_names()
+        if 'monitors' not in tables:
+            logger.info("Monitors table not found - will be created by schema initialization")
+            return True
+        
+        columns = inspector.get_columns('monitors')
+        column_names = [col['name'] for col in columns]
+        logger.info(f"Current monitors table columns: {column_names}")
+        
+        # Define required columns that should exist
+        dialect = session.bind.dialect.name
+        required_columns = {
+            'arrest_date': 'DATE NULL',
+            'arrest_reason': 'VARCHAR(255) NULL',
+            'arresting_agency': 'VARCHAR(255) NULL',
+            'mugshot': 'TEXT NULL',
+            'enable_notifications': 'INTEGER NOT NULL DEFAULT 1',
+            'notify_method': 'VARCHAR(255) NULL',
+            'notify_address': 'VARCHAR(255) NOT NULL DEFAULT \'\'',
+        }
+        
+        # Adjust column definitions for different databases
+        if dialect == 'postgresql':
+            required_columns['mugshot'] = 'TEXT NULL'
+            required_columns['notify_method'] = 'VARCHAR(255) DEFAULT \'pushover\''
+        elif dialect == 'sqlite':
+            required_columns['arrest_date'] = 'DATE'
+            
+        missing_columns = []
+        for col_name, col_def in required_columns.items():
+            if col_name not in column_names:
+                missing_columns.append((col_name, col_def))
+        
+        if not missing_columns:
+            logger.info("✅ All required monitors table columns already exist")
+            return True
+        
+        logger.info(f"Adding {len(missing_columns)} missing columns to monitors table...")
+        
+        # Add missing columns
+        for col_name, col_def in missing_columns:
+            try:
+                logger.info(f"Adding column: {col_name}")
+                sql = f"ALTER TABLE monitors ADD COLUMN {col_name} {col_def}"
+                session.execute(text(sql))
+                session.commit()
+                logger.info(f"✅ Added {col_name} column successfully")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if 'duplicate' in error_msg or 'already exists' in error_msg:
+                    logger.info(f"✅ {col_name} column already exists")
+                else:
+                    logger.warning(f"⚠️ Could not add {col_name} column: {e}")
+                    # Continue with other columns
+        
+        # Try to add unique constraint if it doesn't exist
+        try:
+            if dialect != 'sqlite':  # SQLite doesn't support adding constraints easily
+                session.execute(text("ALTER TABLE monitors ADD CONSTRAINT unique_monitor UNIQUE (name, notify_address)"))
+                session.commit()
+                logger.info("✅ Added unique constraint to monitors table")
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'duplicate' in error_msg or 'already exists' in error_msg:
+                logger.info("✅ Unique constraint already exists")
+            else:
+                logger.info(f"ℹ️ Could not add unique constraint: {e}")
+                # This is not critical, continue
+        
+        logger.info("✅ Monitors table schema update completed")
+        return True
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Monitors schema update failed: {e}")
         return False
     finally:
         session.close()
