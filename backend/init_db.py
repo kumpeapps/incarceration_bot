@@ -447,7 +447,9 @@ def initialize_groups():
 def initialize_database():
     """Initialize database with all necessary tables and data."""
     try:
-        from database_connect import Base, new_session
+        from database_connect import Base, database_uri
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
         # Import all models to ensure they're registered with Base
         from models.Inmate import Inmate
         from models.Jail import Jail
@@ -457,7 +459,10 @@ def initialize_database():
         
         logger.info("Initializing database schema...")
         
-        session = new_session()
+        # Create database engine and session manually to avoid table creation conflicts
+        engine = create_engine(database_uri)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         
         # Use clean schema approach instead of Base.metadata.create_all()
         # This handles partitioning and optimizations properly
@@ -474,17 +479,39 @@ def initialize_database():
             session.commit()
             logger.info("✅ Clean schema initialization completed successfully")
             
-        except ImportError:
-            # Fallback to traditional approach if clean schema not available
-            logger.warning("Clean schema not available, falling back to traditional table creation")
+        except ImportError as import_error:
+            # Only fall back if the clean schema module is genuinely missing
+            logger.error(f"Clean schema module not available: {import_error}")
+            logger.warning("Falling back to traditional table creation")
             logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
-            Base.metadata.create_all(session.bind)
+            # Use checkfirst=True to avoid "table already exists" errors
+            Base.metadata.create_all(session.bind, checkfirst=True)
             
         except Exception as schema_error:
-            logger.error(f"Clean schema initialization failed: {schema_error}")
-            logger.info("Falling back to traditional table creation...")
-            logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
-            Base.metadata.create_all(session.bind)
+            # Check if it's a database connection error
+            error_msg = str(schema_error).lower()
+            if any(phrase in error_msg for phrase in ['can\'t connect', 'connection', 'timeout', 'host']):
+                logger.error(f"Database connection error during clean schema: {schema_error}")
+                raise  # Re-raise connection errors - don't fall back
+            
+            # Check if it's just table existence errors (safe to ignore)
+            elif any(phrase in error_msg for phrase in ['already exists', 'duplicate', 'table exists']):
+                logger.info("Tables already exist - clean schema completed")
+                # Still set up groups if possible
+                try:
+                    initialize_groups(session)
+                    session.commit()
+                    logger.info("✅ Groups initialization completed")
+                except Exception as group_error:
+                    logger.warning(f"Group initialization failed: {group_error}")
+            
+            else:
+                # For other errors, log and fall back carefully
+                logger.error(f"Clean schema initialization error: {schema_error}")
+                logger.warning("Falling back to traditional table creation")
+                logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
+                # Use checkfirst=True to avoid "table already exists" errors  
+                Base.metadata.create_all(session.bind, checkfirst=True)
             
         session.close()
         logger.info("Database schema initialization completed")
