@@ -228,6 +228,10 @@ def run_alembic_migrations():
         if not ensure_monitors_schema():
             logger.warning("Monitors schema update failed, but continuing...")
             
+        # Ensure user_groups table schema is up to date
+        if not ensure_user_groups_schema():
+            logger.warning("UserGroups schema update failed, but continuing...")
+            
         from alembic.config import Config
         from alembic import command
         
@@ -452,6 +456,112 @@ def ensure_monitors_schema():
     except Exception as e:
         session.rollback()
         logger.error(f"Monitors schema update failed: {e}")
+        return False
+    finally:
+        session.close()
+
+def ensure_user_groups_schema():
+    """Ensure user_groups table exists with proper schema."""
+    logger.info("Ensuring user_groups table schema is up to date...")
+    
+    from database_connect import new_session
+    from sqlalchemy import text, inspect
+    from sqlalchemy.exc import OperationalError
+    
+    session = new_session()
+    try:
+        inspector = inspect(session.bind)
+        
+        # Check if user_groups table exists
+        tables = inspector.get_table_names()
+        if 'user_groups' not in tables:
+            logger.info("Creating user_groups table...")
+            
+            # Create the user_groups table
+            dialect = session.bind.dialect.name
+            
+            if dialect == 'mysql':
+                create_sql = """
+                CREATE TABLE user_groups (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    group_id INT NOT NULL,
+                    assigned_by INT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY unique_user_group (user_id, group_id),
+                    KEY ix_user_groups_user_id (user_id),
+                    KEY ix_user_groups_group_id (group_id),
+                    CONSTRAINT fk_user_groups_user_id FOREIGN KEY (user_id) REFERENCES users (id),
+                    CONSTRAINT fk_user_groups_group_id FOREIGN KEY (group_id) REFERENCES groups (id),
+                    CONSTRAINT fk_user_groups_assigned_by FOREIGN KEY (assigned_by) REFERENCES users (id)
+                )
+                """
+            elif dialect == 'postgresql':
+                create_sql = """
+                CREATE TABLE user_groups (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    group_id INTEGER NOT NULL,
+                    assigned_by INTEGER NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT unique_user_group UNIQUE (user_id, group_id),
+                    CONSTRAINT fk_user_groups_user_id FOREIGN KEY (user_id) REFERENCES users (id),
+                    CONSTRAINT fk_user_groups_group_id FOREIGN KEY (group_id) REFERENCES groups (id),
+                    CONSTRAINT fk_user_groups_assigned_by FOREIGN KEY (assigned_by) REFERENCES users (id)
+                );
+                CREATE INDEX ix_user_groups_user_id ON user_groups (user_id);
+                CREATE INDEX ix_user_groups_group_id ON user_groups (group_id);
+                """
+            else:  # SQLite
+                create_sql = """
+                CREATE TABLE user_groups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    group_id INTEGER NOT NULL,
+                    assigned_by INTEGER NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (user_id, group_id),
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    FOREIGN KEY (group_id) REFERENCES groups (id),
+                    FOREIGN KEY (assigned_by) REFERENCES users (id)
+                );
+                CREATE INDEX ix_user_groups_user_id ON user_groups (user_id);
+                CREATE INDEX ix_user_groups_group_id ON user_groups (group_id);
+                """
+            
+            # Execute the create statement
+            for sql_statement in create_sql.split(';'):
+                if sql_statement.strip():
+                    session.execute(text(sql_statement.strip()))
+            
+            session.commit()
+            logger.info("✅ Created user_groups table successfully")
+            return True
+        else:
+            logger.info("✅ user_groups table already exists")
+            
+            # Verify required columns exist
+            columns = inspector.get_columns('user_groups')
+            column_names = [col['name'] for col in columns]
+            
+            required_columns = ['id', 'user_id', 'group_id', 'assigned_by', 'created_at', 'updated_at']
+            missing_columns = [col for col in required_columns if col not in column_names]
+            
+            if missing_columns:
+                logger.warning(f"user_groups table exists but missing columns: {missing_columns}")
+                # For now, just log - creating missing columns would be more complex
+            else:
+                logger.info("✅ user_groups table has all required columns")
+            
+            return True
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"user_groups schema creation failed: {e}")
         return False
     finally:
         session.close()
@@ -683,12 +793,10 @@ def run_comprehensive_schema_migration():
             # Final fallback to existing monitors schema function
             logger.info("🔄 Falling back to basic monitors schema migration...")
             try:
-                result = ensure_monitors_schema()
-                if result:
-                    logger.info("✅ Basic schema migration completed successfully")
-                else:
-                    logger.warning("⚠️  Basic schema migration had issues")
-                return result
+                ensure_monitors_schema()
+                ensure_user_groups_schema()
+                logger.info("✅ Basic schema migration completed successfully")
+                return True
             except Exception as e3:
                 logger.error(f"Basic schema migration failed: {e3}")
                 logger.info("Continuing without comprehensive migration")

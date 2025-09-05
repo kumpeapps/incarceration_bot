@@ -297,7 +297,7 @@ class CompleteDatabaseMigrator:
             # Join queries that commonly fail
             ("user_groups", """SELECT u.username, g.name 
                               FROM users u 
-                              LEFT JOIN usergroups ug ON u.id = ug.user_id 
+                              LEFT JOIN user_groups ug ON u.id = ug.user_id 
                               LEFT JOIN groups g ON ug.group_id = g.id 
                               LIMIT 1"""),
         ]
