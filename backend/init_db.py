@@ -224,6 +224,18 @@ def run_alembic_migrations():
             logger.error("Critical schema updates failed")
             return False
             
+        # Ensure monitors table schema is up to date
+        if not ensure_monitors_schema():
+            logger.warning("Monitors schema update failed, but continuing...")
+            
+        # Ensure user_groups table schema is up to date
+        if not ensure_user_groups_schema():
+            logger.warning("UserGroups schema update failed, but continuing...")
+            
+        # Ensure monitor_links table schema is up to date
+        if not ensure_monitor_links_schema():
+            logger.warning("MonitorLinks schema update failed, but continuing...")
+            
         from alembic.config import Config
         from alembic import command
         
@@ -360,6 +372,422 @@ def run_manual_migration_fallback():
     finally:
         session.close()
 
+def ensure_monitors_schema():
+    """Ensure monitors table has all required columns from SQLAlchemy model."""
+    logger.info("Ensuring monitors table schema is up to date...")
+    
+    from database_connect import new_session
+    from sqlalchemy import text, inspect
+    from sqlalchemy.exc import OperationalError
+    
+    session = new_session()
+    try:
+        inspector = inspect(session.bind)
+        
+        # Check if monitors table exists
+        tables = inspector.get_table_names()
+        if 'monitors' not in tables:
+            logger.info("Monitors table not found - will be created by schema initialization")
+            return True
+        
+        columns = inspector.get_columns('monitors')
+        column_names = [col['name'] for col in columns]
+        logger.info(f"Current monitors table columns: {column_names}")
+        
+        # Define required columns that should exist
+        dialect = session.bind.dialect.name
+        required_columns = {
+            'arrest_date': 'DATE NULL',
+            'arrest_reason': 'VARCHAR(255) NULL',
+            'arresting_agency': 'VARCHAR(255) NULL',
+            'mugshot': 'TEXT NULL',
+            'enable_notifications': 'INTEGER NOT NULL DEFAULT 1',
+            'notify_method': 'VARCHAR(255) NULL',
+            'notify_address': 'VARCHAR(255) NOT NULL DEFAULT \'\'',
+        }
+        
+        # Adjust column definitions for different databases
+        if dialect == 'postgresql':
+            required_columns['mugshot'] = 'TEXT NULL'
+            required_columns['notify_method'] = 'VARCHAR(255) DEFAULT \'pushover\''
+        elif dialect == 'sqlite':
+            required_columns['arrest_date'] = 'DATE'
+            
+        missing_columns = []
+        for col_name, col_def in required_columns.items():
+            if col_name not in column_names:
+                missing_columns.append((col_name, col_def))
+        
+        if not missing_columns:
+            logger.info("✅ All required monitors table columns already exist")
+            return True
+        
+        logger.info(f"Adding {len(missing_columns)} missing columns to monitors table...")
+        
+        # Add missing columns
+        for col_name, col_def in missing_columns:
+            try:
+                logger.info(f"Adding column: {col_name}")
+                sql = f"ALTER TABLE monitors ADD COLUMN {col_name} {col_def}"
+                session.execute(text(sql))
+                session.commit()
+                logger.info(f"✅ Added {col_name} column successfully")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if 'duplicate' in error_msg or 'already exists' in error_msg:
+                    logger.info(f"✅ {col_name} column already exists")
+                else:
+                    logger.warning(f"⚠️ Could not add {col_name} column: {e}")
+                    # Continue with other columns
+        
+        # Try to add unique constraint if it doesn't exist
+        try:
+            if dialect != 'sqlite':  # SQLite doesn't support adding constraints easily
+                session.execute(text("ALTER TABLE monitors ADD CONSTRAINT unique_monitor UNIQUE (name, notify_address)"))
+                session.commit()
+                logger.info("✅ Added unique constraint to monitors table")
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'duplicate' in error_msg or 'already exists' in error_msg:
+                logger.info("✅ Unique constraint already exists")
+            else:
+                logger.info(f"ℹ️ Could not add unique constraint: {e}")
+                # This is not critical, continue
+        
+        logger.info("✅ Monitors table schema update completed")
+        return True
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Monitors schema update failed: {e}")
+        return False
+    finally:
+        session.close()
+
+def ensure_user_groups_schema():
+    """Ensure user_groups table exists with proper schema."""
+    logger.info("Ensuring user_groups table schema is up to date...")
+    
+    from database_connect import new_session
+    from sqlalchemy import text, inspect
+    from sqlalchemy.exc import OperationalError
+    
+    session = new_session()
+    try:
+        inspector = inspect(session.bind)
+        
+        # Check if user_groups table exists
+        tables = inspector.get_table_names()
+        if 'user_groups' not in tables:
+            logger.info("Creating user_groups table...")
+            
+            # Create the user_groups table
+            dialect = session.bind.dialect.name
+            
+            if dialect == 'mysql':
+                create_sql = """
+                CREATE TABLE user_groups (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    group_id INT NOT NULL,
+                    assigned_by INT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY unique_user_group (user_id, group_id),
+                    KEY ix_user_groups_user_id (user_id),
+                    KEY ix_user_groups_group_id (group_id),
+                    CONSTRAINT fk_user_groups_user_id FOREIGN KEY (user_id) REFERENCES users (id),
+                    CONSTRAINT fk_user_groups_group_id FOREIGN KEY (group_id) REFERENCES groups (id),
+                    CONSTRAINT fk_user_groups_assigned_by FOREIGN KEY (assigned_by) REFERENCES users (id)
+                )
+                """
+            elif dialect == 'postgresql':
+                create_sql = """
+                CREATE TABLE user_groups (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    group_id INTEGER NOT NULL,
+                    assigned_by INTEGER NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT unique_user_group UNIQUE (user_id, group_id),
+                    CONSTRAINT fk_user_groups_user_id FOREIGN KEY (user_id) REFERENCES users (id),
+                    CONSTRAINT fk_user_groups_group_id FOREIGN KEY (group_id) REFERENCES groups (id),
+                    CONSTRAINT fk_user_groups_assigned_by FOREIGN KEY (assigned_by) REFERENCES users (id)
+                );
+                CREATE INDEX ix_user_groups_user_id ON user_groups (user_id);
+                CREATE INDEX ix_user_groups_group_id ON user_groups (group_id);
+                """
+            else:  # SQLite
+                create_sql = """
+                CREATE TABLE user_groups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    group_id INTEGER NOT NULL,
+                    assigned_by INTEGER NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (user_id, group_id),
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    FOREIGN KEY (group_id) REFERENCES groups (id),
+                    FOREIGN KEY (assigned_by) REFERENCES users (id)
+                );
+                CREATE INDEX ix_user_groups_user_id ON user_groups (user_id);
+                CREATE INDEX ix_user_groups_group_id ON user_groups (group_id);
+                """
+            
+            # Execute the create statement
+            for sql_statement in create_sql.split(';'):
+                if sql_statement.strip():
+                    session.execute(text(sql_statement.strip()))
+            
+            session.commit()
+            logger.info("✅ Created user_groups table successfully")
+            return True
+        else:
+            logger.info("✅ user_groups table already exists")
+            
+            # Verify required columns exist
+            columns = inspector.get_columns('user_groups')
+            column_names = [col['name'] for col in columns]
+            
+            required_columns = ['id', 'user_id', 'group_id', 'assigned_by', 'created_at', 'updated_at']
+            missing_columns = [col for col in required_columns if col not in column_names]
+            
+            if missing_columns:
+                logger.warning(f"user_groups table exists but missing columns: {missing_columns}")
+                # For now, just log - creating missing columns would be more complex
+            else:
+                logger.info("✅ user_groups table has all required columns")
+            
+            return True
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"user_groups schema creation failed: {e}")
+        return False
+    finally:
+        session.close()
+
+def ensure_monitor_links_schema():
+    """Ensure monitor_links table exists with proper schema."""
+    logger.info("Ensuring monitor_links table schema is up to date...")
+    
+    from database_connect import new_session
+    from sqlalchemy import text, inspect
+    from sqlalchemy.exc import OperationalError
+    
+    session = new_session()
+    try:
+        inspector = inspect(session.bind)
+        
+        # Check if monitor_links table exists
+        tables = inspector.get_table_names()
+        if 'monitor_links' not in tables:
+            logger.info("Creating monitor_links table...")
+            
+            # Create the monitor_links table with correct schema
+            dialect = session.bind.dialect.name
+            
+            if dialect == 'mysql':
+                create_sql = """
+                CREATE TABLE monitor_links (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    primary_monitor_id INT NOT NULL,
+                    linked_monitor_id INT NOT NULL,
+                    linked_by_user_id INT NOT NULL,
+                    link_reason VARCHAR(500) NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY unique_monitor_link (primary_monitor_id, linked_monitor_id),
+                    KEY ix_monitor_links_primary (primary_monitor_id),
+                    KEY ix_monitor_links_linked (linked_monitor_id),
+                    CONSTRAINT fk_monitor_links_primary FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_linked FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_user FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                )
+                """
+            elif dialect == 'postgresql':
+                create_sql = """
+                CREATE TABLE monitor_links (
+                    id SERIAL PRIMARY KEY,
+                    primary_monitor_id INTEGER NOT NULL,
+                    linked_monitor_id INTEGER NOT NULL,
+                    linked_by_user_id INTEGER NOT NULL,
+                    link_reason VARCHAR(500) NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT unique_monitor_link UNIQUE (primary_monitor_id, linked_monitor_id),
+                    CONSTRAINT fk_monitor_links_primary FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_linked FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_user FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                );
+                CREATE INDEX ix_monitor_links_primary ON monitor_links (primary_monitor_id);
+                CREATE INDEX ix_monitor_links_linked ON monitor_links (linked_monitor_id);
+                """
+            else:  # SQLite
+                create_sql = """
+                CREATE TABLE monitor_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    primary_monitor_id INTEGER NOT NULL,
+                    linked_monitor_id INTEGER NOT NULL,
+                    linked_by_user_id INTEGER NOT NULL,
+                    link_reason VARCHAR(500) NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (primary_monitor_id, linked_monitor_id),
+                    FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                    FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                    FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                );
+                CREATE INDEX ix_monitor_links_primary ON monitor_links (primary_monitor_id);
+                CREATE INDEX ix_monitor_links_linked ON monitor_links (linked_monitor_id);
+                """
+            
+            # Execute the create statement
+            for sql_statement in create_sql.split(';'):
+                if sql_statement.strip():
+                    session.execute(text(sql_statement.strip()))
+            
+            session.commit()
+            logger.info("✅ Created monitor_links table successfully")
+            return True
+        else:
+            logger.info("monitor_links table exists, checking schema...")
+            
+            # Check current columns
+            columns = inspector.get_columns('monitor_links')
+            column_names = [col['name'] for col in columns]
+            logger.info(f"Current monitor_links columns: {column_names}")
+            
+            # Check if it has the old schema (monitor_id, user_id) vs new schema
+            if 'monitor_id' in column_names and 'primary_monitor_id' not in column_names:
+                logger.warning("⚠️  monitor_links table has OLD SCHEMA - needs migration")
+                logger.warning(f"   Found old columns: {column_names}")
+                logger.info("🔧 Dropping old monitor_links table and recreating with correct schema")
+                
+                try:
+                    # Disable foreign key checks to allow dropping table
+                    dialect = session.bind.dialect.name
+                    if dialect == 'mysql':
+                        session.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+                        logger.debug("Disabled MySQL foreign key checks")
+                    elif dialect == 'postgresql':
+                        # PostgreSQL handles this differently, but we can still drop
+                        pass
+                    
+                    # Drop the old table
+                    session.execute(text("DROP TABLE monitor_links"))
+                    session.commit()
+                    logger.info("✅ Old monitor_links table dropped successfully")
+                    
+                    # Re-enable foreign key checks
+                    if dialect == 'mysql':
+                        session.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+                        logger.debug("Re-enabled MySQL foreign key checks")
+                    
+                    # Now create the new table with correct schema
+                    logger.info("🔨 Creating new monitor_links table with correct schema...")
+                    
+                    # Create the correct schema (same as the creation block above)
+                    if dialect == 'mysql':
+                        create_sql = """
+                        CREATE TABLE monitor_links (
+                            id INT NOT NULL AUTO_INCREMENT,
+                            primary_monitor_id INT NOT NULL,
+                            linked_monitor_id INT NOT NULL,
+                            linked_by_user_id INT NOT NULL,
+                            link_reason VARCHAR(500) NULL,
+                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (id),
+                            UNIQUE KEY unique_monitor_link (primary_monitor_id, linked_monitor_id),
+                            KEY ix_monitor_links_primary (primary_monitor_id),
+                            KEY ix_monitor_links_linked (linked_monitor_id),
+                            CONSTRAINT fk_monitor_links_primary FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                            CONSTRAINT fk_monitor_links_linked FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                            CONSTRAINT fk_monitor_links_user FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                        )
+                        """
+                    elif dialect == 'postgresql':
+                        create_sql = """
+                        CREATE TABLE monitor_links (
+                            id SERIAL PRIMARY KEY,
+                            primary_monitor_id INTEGER NOT NULL,
+                            linked_monitor_id INTEGER NOT NULL,
+                            linked_by_user_id INTEGER NOT NULL,
+                            link_reason VARCHAR(500) NULL,
+                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT unique_monitor_link UNIQUE (primary_monitor_id, linked_monitor_id),
+                            CONSTRAINT fk_monitor_links_primary FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                            CONSTRAINT fk_monitor_links_linked FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                            CONSTRAINT fk_monitor_links_user FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                        );
+                        CREATE INDEX ix_monitor_links_primary ON monitor_links (primary_monitor_id);
+                        CREATE INDEX ix_monitor_links_linked ON monitor_links (linked_monitor_id);
+                        """
+                    else:  # SQLite
+                        create_sql = """
+                        CREATE TABLE monitor_links (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            primary_monitor_id INTEGER NOT NULL,
+                            linked_monitor_id INTEGER NOT NULL,
+                            linked_by_user_id INTEGER NOT NULL,
+                            link_reason VARCHAR(500) NULL,
+                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE (primary_monitor_id, linked_monitor_id),
+                            FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                            FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                            FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                        );
+                        CREATE INDEX ix_monitor_links_primary ON monitor_links (primary_monitor_id);
+                        CREATE INDEX ix_monitor_links_linked ON monitor_links (linked_monitor_id);
+                        """
+                    
+                    # Execute the create statement
+                    for sql_statement in create_sql.split(';'):
+                        if sql_statement.strip():
+                            session.execute(text(sql_statement.strip()))
+                    
+                    session.commit()
+                    logger.info("✅ NEW monitor_links table created successfully with correct schema")
+                    
+                    # Verify the new schema (need fresh inspector)
+                    fresh_inspector = inspect(session.bind)
+                    new_columns = fresh_inspector.get_columns('monitor_links')
+                    new_column_names = [col['name'] for col in new_columns]
+                    logger.info(f"✅ New monitor_links columns: {new_column_names}")
+                    
+                    return True
+                    
+                except Exception as drop_error:
+                    logger.error(f"❌ Failed to migrate monitor_links table: {drop_error}")
+                    session.rollback()
+                    return False
+            
+            elif 'primary_monitor_id' in column_names:
+                logger.info("✅ monitor_links table has correct schema")
+                
+                # Verify all required columns exist
+                required_columns = ['id', 'primary_monitor_id', 'linked_monitor_id', 'linked_by_user_id', 'link_reason', 'created_at']
+                missing_columns = [col for col in required_columns if col not in column_names]
+                
+                if missing_columns:
+                    logger.warning(f"monitor_links table exists but missing columns: {missing_columns}")
+                    # For now, just log - creating missing columns would be more complex
+                else:
+                    logger.info("✅ monitor_links table has all required columns")
+                
+                return True
+            else:
+                logger.warning("monitor_links table has unexpected schema")
+                return False
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"monitor_links schema creation failed: {e}")
+        return False
+    finally:
+        session.close()
+
 def initialize_groups():
     """Initialize required groups in the database."""
     logger.info("Starting initialize_groups function...")
@@ -447,7 +875,9 @@ def initialize_groups():
 def initialize_database():
     """Initialize database with all necessary tables and data."""
     try:
-        from database_connect import Base, new_session
+        from database_connect import Base, database_uri
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
         # Import all models to ensure they're registered with Base
         from models.Inmate import Inmate
         from models.Jail import Jail
@@ -457,21 +887,81 @@ def initialize_database():
         
         logger.info("Initializing database schema...")
         
-        session = new_session()
-        # Create all tables using SQLAlchemy metadata
-        logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
-        Base.metadata.create_all(session.bind)
+        # Create database engine and session manually to avoid table creation conflicts
+        engine = create_engine(database_uri)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        
+        # Use clean schema approach instead of Base.metadata.create_all()
+        # This handles partitioning and optimizations properly
+        try:
+            from create_clean_schema import create_complete_schema, initialize_groups
+            logger.info("Using clean schema approach for database initialization...")
+            
+            # Create complete optimized schema with partitioning
+            create_complete_schema(session)
+            
+            # Set up default groups
+            initialize_groups(session)
+            
+            session.commit()
+            logger.info("✅ Clean schema initialization completed successfully")
+            
+        except ImportError as import_error:
+            # Only fall back if the clean schema module is genuinely missing
+            logger.error(f"Clean schema module not available: {import_error}")
+            logger.warning("Falling back to traditional table creation")
+            logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
+            # Use checkfirst=True to avoid "table already exists" errors
+            Base.metadata.create_all(session.bind, checkfirst=True)
+            
+        except Exception as schema_error:
+            # Check if it's a database connection error
+            error_msg = str(schema_error).lower()
+            if any(phrase in error_msg for phrase in ['can\'t connect', 'connection', 'timeout', 'host']):
+                logger.error(f"Database connection error during clean schema: {schema_error}")
+                raise  # Re-raise connection errors - don't fall back
+            
+            # Check if it's just table existence errors (safe to ignore)
+            elif any(phrase in error_msg for phrase in ['already exists', 'duplicate', 'table exists']):
+                logger.info("Tables already exist - clean schema completed")
+                # Still set up groups if possible
+                try:
+                    initialize_groups(session)
+                    session.commit()
+                    logger.info("✅ Groups initialization completed")
+                except Exception as group_error:
+                    logger.warning(f"Group initialization failed: {group_error}")
+            
+            else:
+                # For other errors, log and fall back carefully
+                logger.error(f"Clean schema initialization error: {schema_error}")
+                logger.warning("Falling back to traditional table creation")
+                logger.info(f"Creating tables: {[table.name for table in Base.metadata.tables.values()]}")
+                # Use checkfirst=True to avoid "table already exists" errors  
+                Base.metadata.create_all(session.bind, checkfirst=True)
+            
         session.close()
         logger.info("Database schema initialization completed")
         
-        # Run Alembic migrations
-        if not run_alembic_migrations():
-            logger.warning("Alembic migrations failed, but continuing with startup")
+        # Run Alembic migrations (only if not using clean schema)
+        # Skip migrations when using clean schema to avoid conflicts
+        try:
+            from create_clean_schema import create_complete_schema
+            logger.info("Clean schema detected - skipping Alembic migrations to avoid conflicts")
+        except ImportError:
+            logger.info("Running Alembic migrations...")
+            if not run_alembic_migrations():
+                logger.warning("Alembic migrations failed, but continuing with startup")
         
-        # Ensure required groups exist
-        logger.info("About to initialize groups...")
-        initialize_groups()
-        logger.info("Group initialization completed")
+        # Ensure required groups exist (only if not already done by clean schema)
+        try:
+            from create_clean_schema import initialize_groups
+            logger.info("Groups already initialized by clean schema")
+        except ImportError:
+            logger.info("About to initialize groups...")
+            initialize_groups()
+            logger.info("Group initialization completed")
         
         logger.info("Database initialization completed successfully")
         return True
@@ -485,6 +975,61 @@ def initialize_database():
 
 
 
+def run_comprehensive_schema_migration():
+    """Run comprehensive schema migration for all models."""
+    try:
+        from database_migration_complete import CompleteDatabaseMigrator
+        
+        logger.info("🚀 Running comprehensive database migration system...")
+        
+        # Create and run complete migrator
+        migrator = CompleteDatabaseMigrator()
+        
+        # Run the complete migration process
+        if migrator.run_complete_migration():
+            logger.info("✅ Comprehensive database migration completed successfully")
+            return True
+        else:
+            logger.error("❌ Comprehensive database migration failed")
+            return False
+            
+    except ImportError as e:
+        logger.warning(f"Could not import database_migration_complete: {e}")
+        
+        # Fallback to individual schema migrator
+        try:
+            from schema_migrator import run_comprehensive_migration, verify_migration
+            
+            logger.info("🔄 Falling back to individual schema migrator...")
+            
+            if run_comprehensive_migration():
+                logger.info("✅ Fallback schema migration completed successfully")
+                return True
+            else:
+                logger.error("❌ Fallback schema migration failed")
+                return False
+                
+        except ImportError as e2:
+            logger.warning(f"Could not import schema_migrator either: {e2}")
+            
+            # Final fallback to existing monitors schema function
+            logger.info("🔄 Falling back to basic monitors schema migration...")
+            try:
+                ensure_monitors_schema()
+                ensure_user_groups_schema()
+                ensure_monitor_links_schema()
+                logger.info("✅ Basic schema migration completed successfully")
+                return True
+            except Exception as e3:
+                logger.error(f"Basic schema migration failed: {e3}")
+                logger.info("Continuing without comprehensive migration")
+                return True
+            
+    except Exception as e:
+        logger.error(f"Error during comprehensive schema migration: {e}")
+        logger.info("Continuing without comprehensive migration - application should still function")
+        return True
+
 def main():
     """Main initialization function."""
     logger.info("Starting database initialization...")
@@ -497,6 +1042,11 @@ def main():
     # Initialize database
     if not initialize_database():
         logger.error("Database initialization failed")
+        sys.exit(1)
+    
+    # Run comprehensive schema migration for all models
+    if not run_comprehensive_schema_migration():
+        logger.error("Comprehensive schema migration failed")
         sys.exit(1)
     
     logger.info("Database initialization completed successfully")

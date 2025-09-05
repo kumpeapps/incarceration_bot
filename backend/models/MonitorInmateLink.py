@@ -28,7 +28,7 @@ class MonitorInmateLink(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     monitor_id = Column(Integer, ForeignKey("monitors.idmonitors"), nullable=False)
-    inmate_id = Column(Integer, ForeignKey("inmates.idinmates"), nullable=False)
+    inmate_id = Column(Integer, nullable=False)  # No FK constraint for partitioning compatibility
     linked_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_excluded = Column(Boolean, nullable=False, default=False)  # True = exclude this record, False = include this record
     link_reason = Column(String(500), nullable=True)  # Reason for inclusion/exclusion

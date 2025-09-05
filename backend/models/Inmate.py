@@ -13,6 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Text,
 )
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import relationship
 from database_connect import Base
 
@@ -38,13 +39,13 @@ class Inmate(Base):  # type: ignore
     __tablename__ = "inmates"
     __table_args__ = (
         UniqueConstraint(
-            "name",
-            "race",
-            "dob",
-            "sex", 
-            "arrest_date",
             "jail_id",
-            name="unique_inmate_new",
+            "arrest_date", 
+            "name",
+            "dob",
+            "sex",
+            "race",
+            name="unique_inmate_optimized",
         ),
     )
 
@@ -57,16 +58,15 @@ class Inmate(Base):  # type: ignore
     cell_block = Column(String(255), nullable=True)
     arrest_date = Column(Date, nullable=True)
     held_for_agency = Column(String(255), nullable=True)
-    mugshot = Column(Text(65535), nullable=True)
+    mugshot = Column(MEDIUMTEXT, nullable=True)
     dob = Column(String(255), nullable=False, default="Unknown")
-    hold_reasons = Column(String(1000), nullable=False, default="")  # Changed from Text to String with length
+    hold_reasons = Column(Text, nullable=False, default="")
     is_juvenile = Column(Boolean, nullable=False, default=False)
     release_date = Column(String(255), nullable=False, default="")
     in_custody_date = Column(Date, nullable=False, default=date.today())
     last_seen = Column(DateTime, nullable=True)
-    jail_id = Column(String(255), ForeignKey("jails.jail_id"), nullable=False)
+    jail_id = Column(String(255), nullable=False)  # No FK constraint for partitioning compatibility
     hide_record = Column(Boolean, nullable=False, default=False)
-    jail = relationship("Jail", back_populates="inmates")
 
     def __str__(self) -> str:
         return str(self.name)

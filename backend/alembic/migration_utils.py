@@ -283,3 +283,52 @@ def safe_execute(sql_statement):
     except Exception as e:
         print(f"Failed to execute SQL: {sql_statement}, Error: {e}")
         return False
+
+
+def constraint_exists(table_name, constraint_name):
+    """Check if a constraint exists on a table"""
+    try:
+        connection = op.get_bind()
+        inspector = inspect(connection)
+        
+        # Check unique constraints
+        unique_constraints = inspector.get_unique_constraints(table_name)
+        for constraint in unique_constraints:
+            if constraint['name'] == constraint_name:
+                return True
+                
+        # Check other constraints (foreign keys, check constraints, etc.)
+        try:
+            foreign_keys = inspector.get_foreign_keys(table_name)
+            for fk in foreign_keys:
+                if fk.get('name') == constraint_name:
+                    return True
+        except:
+            pass
+            
+        return False
+    except Exception as e:
+        print(f"Error checking constraint {constraint_name}: {e}")
+        return False
+
+
+def safe_drop_constraint(table_name, constraint_name, constraint_type='unique'):
+    """Safely drop a constraint only if it exists"""
+    if constraint_exists(table_name, constraint_name):
+        print(f"Dropping {constraint_type} constraint {constraint_name} from {table_name}")
+        op.drop_constraint(constraint_name, table_name, type_=constraint_type)
+        return True
+    else:
+        print(f"Constraint {constraint_name} doesn't exist on {table_name}, skipping drop")
+        return False
+
+
+def safe_create_unique_constraint(table_name, constraint_name, columns):
+    """Safely create a unique constraint only if it doesn't exist"""
+    if not constraint_exists(table_name, constraint_name):
+        print(f"Creating unique constraint {constraint_name} on {table_name} with columns: {columns}")
+        op.create_unique_constraint(constraint_name, table_name, columns)
+        return True
+    else:
+        print(f"Constraint {constraint_name} already exists on {table_name}, skipping")
+        return False

@@ -39,6 +39,7 @@ Base = declarative_base()
 def new_session() -> Session:
     """Create a new session"""
     db = create_engine(database_uri)
-    Base.metadata.create_all(db)
+    # Note: Table creation is now handled explicitly in init_db.py
+    # to avoid conflicts with the clean schema approach
     Session = sessionmaker(bind=db)
     return Session()

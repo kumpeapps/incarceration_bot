@@ -8,6 +8,8 @@ import schedule
 import requests  # type: ignore
 from loguru import logger
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 import models  # Import models package to register all models with SQLAlchemy
 from models.Jail import Jail, Inmate
 from scrapes.zuercher import scrape_zuercherportal
@@ -156,11 +158,69 @@ def delete_old_mugshots(session: Session):
     logger.info(f"Deleted mugshots for {num_deleted} inmates.")
 
 
+def wait_for_database_ready(max_retries: int = 30, retry_delay: int = 5) -> bool:
+    """
+    Wait for the database to be ready with all required tables.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        retry_delay: Delay in seconds between retries
+        
+    Returns:
+        bool: True if database is ready, False if timeout
+    """
+    required_tables = ['jails', 'inmates', 'users', 'groups', 'monitors']
+    
+    for attempt in range(max_retries):
+        try:
+            session = db.new_session()
+            
+            # Check if all required tables exist
+            missing_tables = []
+            for table in required_tables:
+                try:
+                    session.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))
+                except (OperationalError, ProgrammingError) as e:
+                    if 'doesn\'t exist' in str(e) or 'does not exist' in str(e):
+                        missing_tables.append(table)
+                    else:
+                        raise
+            
+            session.close()
+            
+            if not missing_tables:
+                logger.info("✅ Database is ready - all required tables exist!")
+                return True
+            else:
+                logger.info(f"⏳ Database not ready yet - missing tables: {missing_tables}")
+                logger.info(f"🔄 Waiting {retry_delay} seconds before retry {attempt + 1}/{max_retries}...")
+                
+        except Exception as e:
+            logger.warning(f"⚠️  Database connection attempt {attempt + 1}/{max_retries} failed: {e}")
+            try:
+                session.close()
+            except:
+                pass
+        
+        if attempt < max_retries - 1:  # Don't sleep on the last attempt
+            time.sleep(retry_delay)
+    
+    logger.error(f"❌ Database not ready after {max_retries} attempts - giving up")
+    return False
+
+
 if __name__ == "__main__":
     logger.remove()
     logger.add(sys.stdout, level=LOG_LEVEL)
     if LOG_FILE:
         logger.add(LOG_FILE, level=LOG_LEVEL)
+    
+    # Wait for database to be ready before proceeding
+    logger.info("🚀 Starting Incarceration Bot - waiting for database to be ready...")
+    if not wait_for_database_ready():
+        logger.error("❌ Failed to connect to database - exiting")
+        sys.exit(1)
+    
     session = db.new_session()
     update_jails_db(session)
     session.close()

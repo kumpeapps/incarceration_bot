@@ -53,7 +53,24 @@ def upgrade():
 
 def downgrade():
     """Remove sessions table."""
-    op.drop_index('idx_sessions_login_time', table_name='sessions')
-    op.drop_index('idx_sessions_is_active', table_name='sessions')
-    op.drop_index('idx_sessions_user_id', table_name='sessions')
-    op.drop_table('sessions')
+    if table_exists('sessions'):
+        print("Removing sessions table and indexes")
+        try:
+            op.drop_index('idx_sessions_login_time', table_name='sessions')
+        except Exception as e:
+            print(f"Warning: Could not drop idx_sessions_login_time: {e}")
+        
+        try:
+            op.drop_index('idx_sessions_is_active', table_name='sessions')
+        except Exception as e:
+            print(f"Warning: Could not drop idx_sessions_is_active: {e}")
+        
+        try:
+            op.drop_index('idx_sessions_user_id', table_name='sessions')
+        except Exception as e:
+            print(f"Warning: Could not drop idx_sessions_user_id: {e}")
+        
+        op.drop_table('sessions')
+        print("Sessions table removed successfully")
+    else:
+        print("Sessions table does not exist, nothing to remove")
