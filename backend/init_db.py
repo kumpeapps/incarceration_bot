@@ -643,6 +643,49 @@ def initialize_database():
 
 
 
+def run_comprehensive_schema_migration():
+    """Run comprehensive schema migration for all models."""
+    try:
+        from database_migration_complete import CompleteDatabaseMigrator
+        
+        logger.info("🚀 Running comprehensive database migration system...")
+        
+        # Create and run complete migrator
+        migrator = CompleteDatabaseMigrator()
+        
+        # Run the complete migration process
+        if migrator.run_complete_migration():
+            logger.info("✅ Comprehensive database migration completed successfully")
+            return True
+        else:
+            logger.error("❌ Comprehensive database migration failed")
+            return False
+            
+    except ImportError as e:
+        logger.warning(f"Could not import database_migration_complete: {e}")
+        
+        # Fallback to individual schema migrator
+        try:
+            from schema_migrator import run_comprehensive_migration, verify_migration
+            
+            logger.info("🔄 Falling back to individual schema migrator...")
+            
+            if run_comprehensive_migration():
+                logger.info("✅ Fallback schema migration completed successfully")
+                return True
+            else:
+                logger.error("❌ Fallback schema migration failed")
+                return False
+                
+        except ImportError as e2:
+            logger.warning(f"Could not import schema_migrator either: {e2}")
+            logger.info("Continuing without comprehensive migration")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error during comprehensive schema migration: {e}")
+        return False
+
 def main():
     """Main initialization function."""
     logger.info("Starting database initialization...")
@@ -655,6 +698,11 @@ def main():
     # Initialize database
     if not initialize_database():
         logger.error("Database initialization failed")
+        sys.exit(1)
+    
+    # Run comprehensive schema migration for all models
+    if not run_comprehensive_schema_migration():
+        logger.error("Comprehensive schema migration failed")
         sys.exit(1)
     
     logger.info("Database initialization completed successfully")
