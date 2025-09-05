@@ -679,12 +679,25 @@ def run_comprehensive_schema_migration():
                 
         except ImportError as e2:
             logger.warning(f"Could not import schema_migrator either: {e2}")
-            logger.info("Continuing without comprehensive migration")
-            return True
+            
+            # Final fallback to existing monitors schema function
+            logger.info("🔄 Falling back to basic monitors schema migration...")
+            try:
+                result = ensure_monitors_schema()
+                if result:
+                    logger.info("✅ Basic schema migration completed successfully")
+                else:
+                    logger.warning("⚠️  Basic schema migration had issues")
+                return result
+            except Exception as e3:
+                logger.error(f"Basic schema migration failed: {e3}")
+                logger.info("Continuing without comprehensive migration")
+                return True
             
     except Exception as e:
         logger.error(f"Error during comprehensive schema migration: {e}")
-        return False
+        logger.info("Continuing without comprehensive migration - application should still function")
+        return True
 
 def main():
     """Main initialization function."""

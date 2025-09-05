@@ -1,12 +1,62 @@
 #!/usr/bin/env python3
 """
-Monitor Table Migration Script
-Adds missing columns to existing monitors table to match SQLAlchemy model
-Run this script if you have an existing database with an old monitors table schema
+⚠️  DEPRECATED MIGRATION SCRIPT ⚠️
+
+This script has been replaced by the comprehensive migration system in backend/
+
+The new migration system:
+- Runs automatically on container startup
+- Handles all SQLAlchemy models (not just monitors) 
+- Supports multiple database types and date formats
+- Provides better error handling and logging
+- Is integrated into the application lifecycle
+
+RECOMMENDED ACTIONS:
+1. For automatic migration: Restart containers - migration runs automatically
+2. For manual migration: Use backend/database_migration_complete.py
+3. For testing: Use backend/test_migration_system.py
+
+LEGACY USAGE (NOT RECOMMENDED):
+This script is kept for backwards compatibility only.
+Use the new system instead for better results.
 """
 
 import sys
 import os
+
+print("⚠️  WARNING: This migration script is DEPRECATED!")
+print("=" * 60)
+print("📍 The comprehensive migration system has replaced this script")
+print("🚀 New location: backend/database_migration_complete.py")
+print("✨ Features: Automatic startup integration, all models, better error handling")
+print("=" * 60)
+print()
+
+# Ask user if they want to continue with the legacy script
+user_input = input("Do you want to continue with this deprecated script? (y/N): ").lower().strip()
+
+if user_input not in ['y', 'yes']:
+    print("✅ Good choice! Here's what to do instead:")
+    print()
+    print("🔄 For automatic migration (recommended):")
+    print("   docker-compose restart")
+    print("   # Migration runs automatically on startup")
+    print()
+    print("🛠️  For manual migration:")
+    print("   python backend/database_migration_complete.py")
+    print()
+    print("🧪 For testing:")
+    print("   python backend/test_migration_system.py")
+    print()
+    print("📊 For status check:")
+    print("   python backend/migration_summary.py")
+    print()
+    print("Exiting deprecated script.")
+    sys.exit(0)
+
+print("⚠️  Proceeding with deprecated script...")
+print("💡 Consider upgrading to the new system for better results")
+print("=" * 60)
 
 # Add paths for different environments
 sys.path.append('/app')          # For container environments  

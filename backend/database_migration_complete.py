@@ -32,7 +32,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 try:
-    from database_connect import new_session, get_db
+    from database_connect import new_session
     from schema_migrator import DatabaseSchemaMigrator
 except ImportError as e:
     logger.error(f"Failed to import required modules: {e}")
