@@ -232,6 +232,10 @@ def run_alembic_migrations():
         if not ensure_user_groups_schema():
             logger.warning("UserGroups schema update failed, but continuing...")
             
+        # Ensure monitor_links table schema is up to date
+        if not ensure_monitor_links_schema():
+            logger.warning("MonitorLinks schema update failed, but continuing...")
+            
         from alembic.config import Config
         from alembic import command
         
@@ -566,6 +570,131 @@ def ensure_user_groups_schema():
     finally:
         session.close()
 
+def ensure_monitor_links_schema():
+    """Ensure monitor_links table exists with proper schema."""
+    logger.info("Ensuring monitor_links table schema is up to date...")
+    
+    from database_connect import new_session
+    from sqlalchemy import text, inspect
+    from sqlalchemy.exc import OperationalError
+    
+    session = new_session()
+    try:
+        inspector = inspect(session.bind)
+        
+        # Check if monitor_links table exists
+        tables = inspector.get_table_names()
+        if 'monitor_links' not in tables:
+            logger.info("Creating monitor_links table...")
+            
+            # Create the monitor_links table with correct schema
+            dialect = session.bind.dialect.name
+            
+            if dialect == 'mysql':
+                create_sql = """
+                CREATE TABLE monitor_links (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    primary_monitor_id INT NOT NULL,
+                    linked_monitor_id INT NOT NULL,
+                    linked_by_user_id INT NOT NULL,
+                    link_reason VARCHAR(500) NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY unique_monitor_link (primary_monitor_id, linked_monitor_id),
+                    KEY ix_monitor_links_primary (primary_monitor_id),
+                    KEY ix_monitor_links_linked (linked_monitor_id),
+                    CONSTRAINT fk_monitor_links_primary FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_linked FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_user FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                )
+                """
+            elif dialect == 'postgresql':
+                create_sql = """
+                CREATE TABLE monitor_links (
+                    id SERIAL PRIMARY KEY,
+                    primary_monitor_id INTEGER NOT NULL,
+                    linked_monitor_id INTEGER NOT NULL,
+                    linked_by_user_id INTEGER NOT NULL,
+                    link_reason VARCHAR(500) NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT unique_monitor_link UNIQUE (primary_monitor_id, linked_monitor_id),
+                    CONSTRAINT fk_monitor_links_primary FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_linked FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                    CONSTRAINT fk_monitor_links_user FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                );
+                CREATE INDEX ix_monitor_links_primary ON monitor_links (primary_monitor_id);
+                CREATE INDEX ix_monitor_links_linked ON monitor_links (linked_monitor_id);
+                """
+            else:  # SQLite
+                create_sql = """
+                CREATE TABLE monitor_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    primary_monitor_id INTEGER NOT NULL,
+                    linked_monitor_id INTEGER NOT NULL,
+                    linked_by_user_id INTEGER NOT NULL,
+                    link_reason VARCHAR(500) NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (primary_monitor_id, linked_monitor_id),
+                    FOREIGN KEY (primary_monitor_id) REFERENCES monitors (idmonitors),
+                    FOREIGN KEY (linked_monitor_id) REFERENCES monitors (idmonitors),
+                    FOREIGN KEY (linked_by_user_id) REFERENCES users (id)
+                );
+                CREATE INDEX ix_monitor_links_primary ON monitor_links (primary_monitor_id);
+                CREATE INDEX ix_monitor_links_linked ON monitor_links (linked_monitor_id);
+                """
+            
+            # Execute the create statement
+            for sql_statement in create_sql.split(';'):
+                if sql_statement.strip():
+                    session.execute(text(sql_statement.strip()))
+            
+            session.commit()
+            logger.info("✅ Created monitor_links table successfully")
+            return True
+        else:
+            logger.info("monitor_links table exists, checking schema...")
+            
+            # Check current columns
+            columns = inspector.get_columns('monitor_links')
+            column_names = [col['name'] for col in columns]
+            
+            # Check if it has the old schema (monitor_id, user_id) vs new schema
+            if 'monitor_id' in column_names and 'primary_monitor_id' not in column_names:
+                logger.warning("monitor_links table has old schema - needs migration")
+                logger.info("Dropping old monitor_links table and recreating with correct schema")
+                
+                # Drop the old table and recreate
+                session.execute(text("DROP TABLE monitor_links"))
+                session.commit()
+                
+                # Recreate with correct schema - call this function recursively
+                return ensure_monitor_links_schema()
+            
+            elif 'primary_monitor_id' in column_names:
+                logger.info("✅ monitor_links table has correct schema")
+                
+                # Verify all required columns exist
+                required_columns = ['id', 'primary_monitor_id', 'linked_monitor_id', 'linked_by_user_id', 'link_reason', 'created_at']
+                missing_columns = [col for col in required_columns if col not in column_names]
+                
+                if missing_columns:
+                    logger.warning(f"monitor_links table exists but missing columns: {missing_columns}")
+                    # For now, just log - creating missing columns would be more complex
+                else:
+                    logger.info("✅ monitor_links table has all required columns")
+                
+                return True
+            else:
+                logger.warning("monitor_links table has unexpected schema")
+                return False
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"monitor_links schema creation failed: {e}")
+        return False
+    finally:
+        session.close()
+
 def initialize_groups():
     """Initialize required groups in the database."""
     logger.info("Starting initialize_groups function...")
@@ -795,6 +924,7 @@ def run_comprehensive_schema_migration():
             try:
                 ensure_monitors_schema()
                 ensure_user_groups_schema()
+                ensure_monitor_links_schema()
                 logger.info("✅ Basic schema migration completed successfully")
                 return True
             except Exception as e3:

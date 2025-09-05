@@ -440,12 +440,15 @@ def get_schema_sql(dialect):
         'monitor_links': f'''
             CREATE TABLE IF NOT EXISTS monitor_links (
                 id INTEGER PRIMARY KEY {auto_increment} NOT NULL,
-                monitor_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
+                primary_monitor_id INTEGER NOT NULL,
+                linked_monitor_id INTEGER NOT NULL,
+                linked_by_user_id INTEGER NOT NULL,
+                link_reason VARCHAR(500) NULL,
                 created_at {datetime_type} NOT NULL DEFAULT {timestamp_default},
-                FOREIGN KEY (monitor_id) REFERENCES monitors(idmonitors),
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                UNIQUE KEY unique_monitor_user_link (monitor_id, user_id)
+                FOREIGN KEY (primary_monitor_id) REFERENCES monitors(idmonitors),
+                FOREIGN KEY (linked_monitor_id) REFERENCES monitors(idmonitors),
+                FOREIGN KEY (linked_by_user_id) REFERENCES users(id),
+                UNIQUE KEY unique_monitor_link (primary_monitor_id, linked_monitor_id)
             )
         ''',
         
