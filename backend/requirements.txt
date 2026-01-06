@@ -16,7 +16,7 @@ python-jose[cryptography]==3.3.0
 
 # Web scraping and HTTP
 requests==2.32.4
-aiohttp==3.12.14
+aiohttp==3.13.3
 beautifulsoup4==4.12.3
 bs4==0.0.2
 urllib3==2.5.0
