@@ -1,41 +1,37 @@
-# Gitleaks Configuration
-# Configuration file for KumpeApps-GitHub-Bot local secret scanner
-# IMPORTANT: All patterns must be lowercase (bot normalizes before matching)
-
-title = "Repository Gitleaks Configuration"
+# Gitleaks configuration for KumpeApps Deployment Bot
+# This file excludes common false positives in deployment configuration files
 
 [allowlist]
-  description = "Global allowlist for false positives"
+description = "Allow deployment bot configuration patterns"
 
-  # Ignore documentation and configuration files
-  # Note: The bot normalizes paths to lowercase before matching
-  paths = [
-    '''readme\.md$''',
-    '''\.gitleaks\.toml$''',
-    '''\.gitleaksignore$''',
-    '''\.agent\.md$''',
-    '''\.prompt\.md$''',
-    '''\.instructions\.md$''',
-    '''.github/agents/''',
-    '''.github/prompts/''',
-  ]
+# Exclude all template files
+paths = [
+  '''\.template$''',
+  '''\.template\.yml$''',
+  '''\.template\.yaml$''',
+]
 
-  # Stop words - ignore these specific strings (normalized to lowercase by bot)
-  stopwords = [
-    "example.com",
-    "main_caddyfile",
-    "sites_dir",
-  ]
+# Stopwords - normalized to lowercase (bot normalizes before matching)
+stopwords = [
+  "nebula_client_token",
+  "dev_nebula_client_token", 
+  "stage_nebula_client_token",
+  "prod_nebula_client_token",
+  "database_url",
+  "api_key",
+  "redis_url",
+  "dev_database_url",
+  "dev_api_key",
+  "dev_redis_url",
+  "stage_database_url",
+  "stage_api_key",
+  "stage_redis_url",
+  "prod_database_url",
+  "prod_api_key",
+  "prod_redis_url",
+]
 
-  # Ignore common false positive patterns in documentation
-  regexes = [
-    # Example domain names
-    '''example\.com''',
-    '''[a-z0-9-]+\.example\.com''',
-    # Common documentation placeholders
-    '''/etc/[a-z0-9/_-]+''',
-    # Script references
-    '''\./[a-z-]+\.sh''',
-    # Git commit messages
-    '''commit -[am]''',
-  ]
+# Allow lines that are clearly env var mappings (not actual secrets)
+regexes = [
+  '''^\s*[A-Z_]+:\s+[A-Z_]+\s*(#.*)?$''',
+]

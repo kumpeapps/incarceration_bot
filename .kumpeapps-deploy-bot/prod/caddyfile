@@ -1,0 +1,11 @@
+incarcerationbot.kumpe.app {  
+  import ssl_defaults
+  import auto_error_pages
+  reverse_proxy {{nebula.ip}}:3001
+}
+
+incarcerationbotapi.kumpe.app {  
+  import ssl_defaults
+  import auto_error_pages
+  reverse_proxy {{nebula.ip}}:8000
+}
