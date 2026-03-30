@@ -1,0 +1,54 @@
+services:
+  incarceration_bot:
+    image: "ghcr.io/kumpeapps/incarceration_bot:latest-release"
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    networks:
+      - incarceration_network
+    depends_on:
+      - nebula_client
+
+  backend_api:
+    image: "ghcr.io/kumpeapps/incarceration_bot_api:latest-release"
+    env_file:
+      - ./.env
+    networks:
+      - incarceration_network
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      - nebula_client
+
+  frontend:
+    image: "ghcr.io/kumpeapps/incarceration_bot_frontend:latest-release"
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      - API_BASE_URL=https://incarcerationbotapi.kumpe.app
+    networks:
+      - incarceration_network
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend_api
+      - nebula_client
+
+  watchtower:
+    image: ghcr.io/nicholas-fedor/watchtower
+    container_name: watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/timezone:/etc/timezone:ro
+      - ~/.docker/config.json:/config.json
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600
+      - TZ=America/Chicago
+
+networks:
+  incarceration_network:
+    driver: bridge
