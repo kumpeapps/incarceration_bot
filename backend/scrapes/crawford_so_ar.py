@@ -35,10 +35,21 @@ def scrape_inmate_data(details_path: str) -> dict:
     req = requests.get(details_url, timeout=30)
     soup = bs4.BeautifulSoup(req.text, "html.parser")
     images = soup.find_all("img")
-    mugshot_url = images[1]["src"]
-    if mugshot_url.startswith("/"):
-        mugshot_url = f"{URL}{mugshot_url}"
-    mugshot = image_url_to_base64(mugshot_url)
+    
+    # Extract mugshot if available
+    mugshot = None
+    if len(images) >= 2:
+        try:
+            mugshot_url = images[1]["src"]
+            if mugshot_url.startswith("/"):
+                mugshot_url = f"{URL}{mugshot_url}"
+            mugshot = image_url_to_base64(mugshot_url)
+        except (KeyError, IndexError, Exception) as e:
+            logger.warning(f"Failed to extract mugshot from {details_url}: {e}")
+            mugshot = None
+    else:
+        logger.debug(f"No mugshot image found for inmate at {details_url}")
+    
     inmate_table = soup.find_all("table")[0]
     inmate_rows = inmate_table.find_all("tr")
     name = inmate_rows[0].text.strip()
